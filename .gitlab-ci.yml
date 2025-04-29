@@ -1,0 +1,99 @@
+stages:
+  - validate
+  - plan
+  - apply
+  - cleanup
+
+variables:
+  TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
+
+# Cache des plugins Terraform
+cache:
+  paths:
+    - .terraform
+
+.terraform_init: &terraform_init
+  before_script:
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+
+# Validation du code Terraform
+validate:
+  stage: validate
+  image: hashicorp/terraform:latest
+  script:
+    - cd ${TF_ROOT}
+    - find . -type f -name "*.tf" -exec dirname {} \; | sort -u | while read m; do (cd "$m" && terraform init -backend=false && terraform validate); done
+  tags:
+    - terraform
+
+# Planification des changements Terraform
+plan:
+  stage: plan
+  image: hashicorp/terraform:latest
+  variables:
+    ENV: dev
+  <<: *terraform_init
+  script:
+    - terraform plan -out=tfplan
+  artifacts:
+    paths:
+      - ${TF_ROOT}/${ENV}/tfplan
+    expire_in: 1 week
+  tags:
+    - terraform
+  only:
+    - merge_requests
+
+# Application des changements Terraform
+apply:
+  stage: apply
+  image: hashicorp/terraform:latest
+  variables:
+    ENV: dev
+  <<: *terraform_init
+  script:
+    - terraform apply -auto-approve tfplan
+  dependencies:
+    - plan
+  tags:
+    - terraform
+  only:
+    - main
+  when: manual
+
+# Déploiement Ansible
+ansible:
+  stage: apply
+  image: willhallonline/ansible:latest
+  script:
+    - cd ${CI_PROJECT_DIR}/ansible
+    - ansible-playbook -i inventory/dev playbooks/setup.yml
+  tags:
+    - ansible
+  only:
+    - main
+  when: manual
+
+# Déploiement Kubernetes avec Helm
+kubernetes:
+  stage: apply
+  image: dtzar/helm-kubectl:latest
+  script:
+    - cd ${CI_PROJECT_DIR}/kubernetes/helm-charts
+    - helm upgrade --install my-app ./my-app --namespace default
+  tags:
+    - kubernetes
+  only:
+    - main
+  when: manual
+
+# Nettoyage (optionnel)
+cleanup:
+  stage: cleanup
+  image: alpine:latest
+  script:
+    - echo "Nettoyage des ressources temporaires..."
+  tags:
+    - terraform
+  when: manual
