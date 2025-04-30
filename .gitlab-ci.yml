@@ -12,15 +12,12 @@ cache:
   paths:
     - .terraform
 
-.terraform_init: &terraform_init
-  before_script:
-    - cd ${TF_ROOT}/${ENV}
-    - terraform init
-
 # Validation du code Terraform
 validate:
   stage: validate
-  image: hashicorp/terraform:latest
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache terraform~=1.6 bash
   script:
     - cd ${TF_ROOT}
     - find . -type f -name "*.tf" -exec dirname {} \; | sort -u | while read m; do (cd "$m" && terraform init -backend=false && terraform validate); done
@@ -30,10 +27,13 @@ validate:
 # Planification des changements Terraform
 plan:
   stage: plan
-  image: hashicorp/terraform:latest
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache terraform~=1.6 bash
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
   variables:
     ENV: dev
-  <<: *terraform_init
   script:
     - terraform plan -out=tfplan
   artifacts:
@@ -48,10 +48,13 @@ plan:
 # Application des changements Terraform
 apply:
   stage: apply
-  image: hashicorp/terraform:latest
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache terraform~=1.6 bash
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
   variables:
     ENV: dev
-  <<: *terraform_init
   script:
     - terraform apply -auto-approve tfplan
   dependencies:
@@ -65,7 +68,7 @@ apply:
 # Déploiement Ansible
 ansible:
   stage: apply
-  image: willhallonline/ansible:latest
+  image: cytopia/ansible:latest
   script:
     - cd ${CI_PROJECT_DIR}/ansible
     - ansible-playbook -i inventory/dev playbooks/setup.yml
