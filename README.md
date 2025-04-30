@@ -1,93 +1,213 @@
-# IaC
+﻿# Infrastructure as Code (IaC) via GitLab CI/CD
 
+## Vue d'ensemble
 
+Ce projet implémente une approche Infrastructure as Code (IaC) complète via GitLab CI/CD pour automatiser le déploiement, la configuration et la gestion d'infrastructure sur un serveur Ubuntu 24.04.
 
-## Getting started
+L'objectif est de créer une infrastructure reproductible, versionnable et maintenable en utilisant des outils modernes de provisionnement et d'orchestration.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+![Badges](https://img.shields.io/badge/IaC-Terraform%20%7C%20Ansible%20%7C%20Kubernetes-blue)
+![Pipeline Status](https://img.shields.io/badge/pipeline-GitLab%20CI%2FCD-orange)
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture et composants
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/dev1338/iac.git
-git branch -M main
-git push -uf origin main
+┌─────────────────┐         ┌───────────────┐        ┌─────────────────┐
+│  Windows Dev    │         │  GitLab.com   │        │  Ubuntu Server  │
+│  VS 2022        │ ───►    │ CI/CD Pipeline│ ───►   │  24.04 LTS      │
+└─────────────────┘         └───────────────┘        └─────────────────┘
+   Développement                Pipelines              Infrastructure
 ```
 
-## Integrate with your tools
+### Composants principaux
 
-- [ ] [Set up project integrations](https://gitlab.com/dev1338/iac/-/settings/integrations)
+- **Terraform** (v1.11.4) : Provisionnement de l'infrastructure
+- **Ansible** : Configuration et déploiement d'applications
+- **Kubernetes/Helm** : Orchestration de conteneurs
+- **GitLab CI/CD** : Automatisation des workflows de déploiement
+- **Docker** : Conteneurisation des services
 
-## Collaborate with your team
+## Prérequis
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Machine de développement
 
-## Test and Deploy
+- Windows avec Visual Studio Enterprise 2022
+- Git client
+- Docker Desktop (recommandé)
+- Terraform CLI (optionnel, déjà inclus dans le pipeline)
 
-Use the built-in continuous integration in GitLab.
+### Serveur cible
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+- Ubuntu Server 24.04 LTS
+- Sur le même réseau privé que la machine de développement
+- Minimum recommandé : 4 CPU, 8 Go RAM, 500 Go SSD
+- Configuration réseau : IP fixe
 
-***
+### GitLab
 
-# Editing this README
+- Compte GitLab.com (licence gratuite)
+- GitLab Runner installé et configuré sur le serveur
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Structure du projet
 
-## Suggestions for a good README
+```
+/
+├── .gitlab-ci.yml                 # Configuration pipeline CI/CD
+├── README.md                      # Ce fichier
+├── terraform/                     # Configuration Infrastructure
+│   ├── modules/                   # Modules Terraform réutilisables
+│   ├── environments/              # Configurations spécifiques aux environnements
+│   │   ├── dev/                   # Environnement de développement
+│   │   └── prod/                  # Environnement de production
+│   └── variables/                 # Définitions des variables
+├── ansible/                       # Configuration et déploiement
+│   ├── playbooks/                 # Playbooks Ansible
+│   ├── roles/                     # Rôles réutilisables
+│   └── inventory/                 # Inventaires des environnements
+├── kubernetes/                    # Orchestration des conteneurs
+│   ├── manifests/                 # Manifestes Kubernetes
+│   └── helm-charts/               # Charts Helm personnalisés
+└── scripts/                       # Scripts utilitaires
+    └── ci-cd/                     # Scripts spécifiques au CI/CD
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Installation et configuration
 
-## Name
-Choose a self-explaining name for your project.
+### 1. Clonage du projet
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```bash
+git clone https://gitlab.com/dev1338/iac.git
+cd iac
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 2. Configuration du serveur
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+Le serveur Ubuntu doit être préparé avec les éléments suivants :
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```bash
+# Mise à jour du système
+sudo apt update && sudo apt upgrade -y
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Installation des dépendances
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release git
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# Installation de Docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io
+sudo usermod -aG docker $USER
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Installation du GitLab Runner
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+sudo apt install gitlab-runner
+sudo usermod -aG docker gitlab-runner
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### 3. Enregistrement du GitLab Runner
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```bash
+sudo gitlab-runner register
+# Suivez les instructions à l'écran :
+# - URL GitLab : https://gitlab.com/
+# - Token : [disponible dans les paramètres CI/CD de votre projet]
+# - Description : [nom descriptif pour votre runner]
+# - Tags : terraform,ansible,kubernetes
+# - Executor : docker
+# - Image par défaut : alpine:latest
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Workflow CI/CD
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Notre pipeline est structuré en plusieurs étapes:
 
-## License
-For open source projects, say how it is licensed.
+1. **Validate** : Vérifie la syntaxe et la cohérence des fichiers Terraform
+2. **Plan** : Génère et affiche un plan des modifications à appliquer
+3. **Apply** : Applique les modifications (validation manuelle requise)
+4. **Cleanup** : Nettoie les ressources temporaires (optionnel)
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+![Pipeline Workflow](https://mermaid.ink/img/pako:eNp1kM1qwzAQhF9F7CkFv0DooT9QeughpQdTL0FaK4uw5KDVQnDw2_eiOnZDSnejZWfmW7hJbTAK16mP0RnCDxRcG0cU7UMP7EgkRawecIMNYYeOYXKOQxS6oLDY4Fy2TJ3W8kkbbBCahH9uozEZ3w9U5Ys-bnOBvdH0H1XefKqNzaRbUyrhvbchTFYwyJuEySs0FjW3-pHXbV03sqqXy16oulHNqlJN_dxW7apqygpRJHLo4OkP6Sj-ePfK1GsQ3h7HgIk-2R6cPRSPsvwFkslr0Q)
+
+## Variables d'environnement
+
+Les variables suivantes doivent être configurées dans les paramètres CI/CD du projet GitLab:
+
+| Variable | Description | Exemple |
+|----------|-------------|---------|
+| `TF_VAR_server_ip` | Adresse IP du serveur cible | `192.168.1.100` |
+| `TF_VAR_domain_name` | Nom de domaine (si applicable) | `example.com` |
+| `ANSIBLE_HOST_KEY_CHECKING` | Désactive la vérification des clés SSH | `False` |
+| `SSH_PRIVATE_KEY` | Clé SSH pour la connexion au serveur | `-----BEGIN RSA PRIVATE KEY...` |
+
+## Commandes utiles
+
+### Terraform (local)
+
+```bash
+# Initialisation
+terraform init
+
+# Vérification de la syntaxe
+terraform validate
+
+# Création du plan
+terraform plan -out=tfplan
+
+# Application du plan
+terraform apply tfplan
+```
+
+### GitLab CI/CD
+
+```bash
+# Exécution manuelle du pipeline
+gitlab-runner exec docker validate --env TF_ROOT=${PWD}/terraform/environments
+
+# Vérification du statut du runner
+sudo gitlab-runner status
+```
+
+## Troubleshooting
+
+### Problèmes courants
+
+1. **Erreur "sh: not found"** : Les images Docker minimalistes (Alpine) nécessitent l'installation de bash via `apk add --no-cache bash`.
+
+2. **Problèmes d'accès SSH** : Vérifiez que la clé privée est correctement configurée dans les variables CI/CD et que l'utilisateur cible dispose des autorisations nécessaires.
+
+3. **Terraform "Plugin reinitialization required"** : Supprimez le répertoire `.terraform` et relancez `terraform init`.
+
+## Standards et bonnes pratiques
+
+- **Code Terraform** : Modulaire, réutilisable et documenté
+- **Conventions de nommage** : snake_case pour les variables, ressources et fichiers
+- **Variables d'environnement** : Utilisées pour les valeurs spécifiques à l'environnement
+- **Secrets** : Jamais stockés en clair, toujours dans les variables GitLab CI/CD
+- **Documentation** : README par module/composant expliquant son utilisation
+
+## État actuel du projet
+
+- ✅ Configuration du serveur Ubuntu 24.04
+- ✅ Installation des prérequis (Docker, GitLab Runner)
+- ✅ Configuration du pipeline CI/CD
+- ✅ Structure de base du projet
+- ⏳ Modules Terraform initiaux
+- ⏳ Playbooks Ansible
+- ⏳ Configuration Kubernetes/Helm
+
+## Contributions
+
+Pour contribuer à ce projet :
+
+1. Créez une nouvelle branche à partir de `main`
+2. Effectuez vos modifications
+3. Soumettez une Merge Request vers `main`
+4. Attendez la validation du pipeline CI/CD
+5. Demandez une revue de code
+
+## Licence
+
+Ce projet est sous licence interne et ne doit pas être distribué sans autorisation.
+
+---
+
+*Dernière mise à jour : avril 2025*

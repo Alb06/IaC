@@ -1,0 +1,132 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+# Terraform - Ignorer les fichiers d'état, variables locales et modules téléchargés
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+.terraform.lock.hcl
+tfplan
+crash.log
+crash.*.log
+
+# Ansible - Ignorer les fichiers temporaires et variables locales
+*.retry
+ansible/*.log
+ansible/roles/*/vars/local.yml
+ansible/vault_password_file
+ansible/collections/*
+
+# Kubernetes/Helm - Ignorer les fichiers temporaires et charts téléchargés
+kubernetes/helm-charts/*/charts/
+kubernetes/helm-charts/*/Chart.lock
+kubernetes/helm-charts/*/.helmignore
+.kube/
+kubeconfig
+
+# Secrets et configurations sensibles
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+**/secrets/*
+.env
+.env.*
+credentials.json
+*_credentials.*
+*secret*
+*password*
+*token*
+*credential*
+
+# Fichiers spécifiques à l'OS
+## Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+## Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# IDE et éditeurs
+## Visual Studio / Visual Studio Code
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.usertasks
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+## JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+out/
+
+# Logs et fichiers temporaires
+*.log
+logs/
+log/
+tmp/
+temp/
+.tmp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Archives et packages
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
