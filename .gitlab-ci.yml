@@ -115,8 +115,6 @@ mirror_to_github:
     - git remote add mirror git@github.com:Alb06/IaC.git  || true
     - git branch main || true
     - git push --mirror mirror
-  only:
-    - main
   rules:
     - if: '$FORCE_MIRROR == "true"'
       when: always
