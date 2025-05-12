@@ -111,15 +111,15 @@ mirror_to_github:
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
     - chmod 600 ~/.ssh/id_ed25519
     - ssh-keyscan github.com >> ~/.ssh/known_hosts
-    - git remote add mirror git@github.com:TON_COMPTE/TON_REPO_GITHUB.git || true
+    - git remote add mirror git@github.com:Alb06/IaC.git  || true
     - git branch main || true
     - git push --mirror mirror
   only:
     - main
   tags:
     - terraform
-  needs:
-    - apply
+  #needs:
+  #  - apply
 
 # Nettoyage (optionnel)
 cleanup:
