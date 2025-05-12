@@ -9,6 +9,7 @@ variables:
   TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
   TF_VERSION: 1.11.4
   GIT_DEPTH: 0
+  FORCE_MIRROR: "true"
 
 # Cache des plugins Terraform
 cache:
@@ -116,11 +117,14 @@ mirror_to_github:
     - git push --mirror mirror
   only:
     - main
+  rules:
+    - if: '$FORCE_MIRROR == "true"'
+      when: always
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      needs:
+        - apply
   tags:
     - terraform
-  #needs:
-  #  - apply
-  when: manual
 
 # Nettoyage (optionnel)
 cleanup:
