@@ -2,11 +2,13 @@ stages:
   - validate
   - plan
   - apply
+  - deploy
   - cleanup
 
 variables:
   TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
   TF_VERSION: 1.11.4
+  GIT_DEPTH: 0
 
 # Cache des plugins Terraform
 cache:
@@ -97,6 +99,27 @@ kubernetes:
   only:
     - main
   when: manual
+
+# Synchronisation avec GitHub
+mirror_to_github:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git openssh
+  script:
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keyscan github.com >> ~/.ssh/known_hosts
+    - git remote add mirror git@github.com:TON_COMPTE/TON_REPO_GITHUB.git || true
+    - git branch main || true
+    - git push --mirror mirror
+  only:
+    - main
+  tags:
+    - terraform
+  needs:
+    - apply
 
 # Nettoyage (optionnel)
 cleanup:
