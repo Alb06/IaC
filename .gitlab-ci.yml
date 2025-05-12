@@ -118,8 +118,8 @@ mirror_to_github:
     - main
   tags:
     - terraform
-  needs:
-    - apply
+  #needs:
+  #  - apply
   when: manual
 
 # Nettoyage (optionnel)
