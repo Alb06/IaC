@@ -7,7 +7,7 @@ stages:
 
 variables:
   TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
-  TF_VERSION: 1.11.4
+  TF_VERSION: 1.12.1
   GIT_DEPTH: 0
   FORCE_MIRROR: "true"
 
@@ -32,7 +32,15 @@ validate:
   <<: *install_terraform
   script:
     - cd ${TF_ROOT}
+    - |
+      if [ ! -d "${ENV}" ]; then
+        echo "Erreur: Le dossier ${ENV} n'existe pas dans ${TF_ROOT}"
+        ls -la
+        exit 1
+      fi
     - find . -type f -name "*.tf" -exec dirname {} \; | sort -u | while read m; do (cd "$m" && terraform init -backend=false && terraform validate); done
+  variables:
+    ENV: dev
   tags:
     - terraform
 
