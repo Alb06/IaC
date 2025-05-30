@@ -1,4 +1,4 @@
-﻿﻿import os
+﻿import os
 import requests
 
 GITLAB_TOKEN = os.environ['GITLAB_TOKEN']
