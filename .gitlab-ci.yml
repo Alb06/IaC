@@ -108,7 +108,7 @@ kubernetes:
     - main
   when: manual
 
-# Synchronisation avec GitHub
+# Synchronisation de la branche avec GitHub
 mirror_to_github:
   stage: deploy
   image: alpine:latest
@@ -129,6 +129,17 @@ mirror_to_github:
       when: always
   tags:
     - terraform
+
+# Synchronisation de l'état des taches avec GitHub
+sync_issues_to_github:
+  stage: deploy
+  image: python:3.11
+  before_script:
+    - pip install requests
+  script:
+    - python scripts/sync_issues.py
+  only:
+    - main
 
 # Nettoyage (optionnel)
 cleanup:
