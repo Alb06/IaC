@@ -115,12 +115,15 @@ mirror_to_github:
   before_script:
     - apk add --no-cache git openssh
   script:
+    # Configuration SSH
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
     - chmod 600 ~/.ssh/id_ed25519
     - ssh-keyscan github.com >> ~/.ssh/known_hosts
+    # Configuration du remote
     - git remote add mirror git@github.com:Alb06/IaC.git || true
-    - git push mirror main --force
+    # Pousser le commit courant vers la branche main de GitHub
+    - git push mirror HEAD:main --force
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
