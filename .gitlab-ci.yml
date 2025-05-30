@@ -127,8 +127,7 @@ mirror_to_github:
     - if: '$FORCE_MIRROR == "true"'
       when: always
     - if: '$CI_COMMIT_BRANCH == "main"'
-      needs:
-        - apply
+      when: always
   tags:
     - terraform
 
