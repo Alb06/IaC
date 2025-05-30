@@ -137,7 +137,7 @@ sync_issues_to_github:
   before_script:
     - pip install requests
   script:
-    - python scripts/sync_issues.py
+    - python scripts/ci-cd/sync_issues.py
   only:
     - main
 
