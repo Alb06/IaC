@@ -140,10 +140,10 @@ sync_issues_to_github:
   script:
     - echo "Démarrage de la synchronisation des issues..."
     - echo "Variables d'environnement disponibles:"
-    - echo "   - GITLAB_PROJECT_ID: ${GITLAB_PROJECT_ID}"
-    - echo "   - GITHUB_REPO: ${GITHUB_REPO}"
-    - echo "   - GITLAB_TOKEN: $(if [ -n "$GITLAB_TOKEN" ]; then echo 'SET'; else echo 'NOT SET'; fi)"
-    - echo "   - GITHUB_TOKEN: $(if [ -n "$GITHUB_TOKEN" ]; then echo 'SET'; else echo 'NOT SET'; fi)"
+    - echo "   - GITLAB_PROJECT_ID= ${GITLAB_PROJECT_ID}"
+    - echo "   - GITHUB_REPO= ${GITHUB_REPO}"
+    - echo "   - GITLAB_TOKEN= $(if [ -n "$GITLAB_TOKEN" ]; then echo 'SET'; else echo 'NOT SET'; fi)"
+    - echo "   - GITHUB_TOKEN= $(if [ -n "$GITHUB_TOKEN" ]; then echo 'SET'; else echo 'NOT SET'; fi)"
     - python scripts/ci-cd/sync_issues.py
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
