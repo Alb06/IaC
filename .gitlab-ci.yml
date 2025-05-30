@@ -9,7 +9,7 @@ variables:
   TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
   TF_VERSION: 1.12.1
   GIT_DEPTH: 0
-  FORCE_MIRROR: "true"
+  FORCE_MIRROR: "false"
 
 # Cache des plugins Terraform
 cache:
