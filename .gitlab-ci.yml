@@ -121,7 +121,6 @@ mirror_to_github:
     - chmod 600 ~/.ssh/id_ed25519
     - ssh-keyscan github.com >> ~/.ssh/known_hosts
     - git remote add mirror git@github.com:Alb06/IaC.git  || true
-    - git branch main || true
     - git push --mirror mirror
   rules:
     - if: '$FORCE_MIRROR == "true"'
