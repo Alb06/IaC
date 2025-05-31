@@ -506,7 +506,7 @@ sync_issues_to_github:
   needs: []
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
+      when: always
   tags:
     - terraform
 
