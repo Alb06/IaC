@@ -1,8 +1,9 @@
 # =============================================================================
-# PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE
+# PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE (VERSION CORRIGÉE)
 # =============================================================================
 # Description : Pipeline automatisé pour le déploiement IaC
 # Utilise les variables centralisées du module globals
+# CORRECTION : Gestion proper des exit codes et artifacts paths
 # =============================================================================
 
 stages:
@@ -123,6 +124,7 @@ plan_dev:
     # Récupération des variables depuis le module globals et planification
     - echo "🔍 Récupération des variables centralisées..."
     - |
+      # CORRECTION: Gestion propre des exit codes terraform plan
       set +e  # Désactive l'arrêt automatique sur erreur
       terraform plan -out=tfplan -detailed-exitcode
       plan_exit_code=$?
@@ -130,47 +132,37 @@ plan_dev:
       
       echo "Terraform plan exit code: $plan_exit_code"
       
+      # CORRECTION: Créer directement le fichier dans le répertoire courant
       case $plan_exit_code in
         0)
           echo "✅ Aucun changement détecté"
-          echo "PLAN_STATUS=no_changes" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=no_changes" > ./plan_status.env
           plan_result="success"
           ;;
         1)
           echo "❌ Erreur lors de la planification"
-          echo "PLAN_STATUS=error" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=error" > ./plan_status.env
           exit 1
           ;;
         2)
           echo "📝 Changements détectés, plan généré"
-          echo "PLAN_STATUS=changes_detected" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
           plan_result="success"
           ;;
         *)
           echo "❌ Code de sortie inattendu: $plan_exit_code"
-          echo "PLAN_STATUS=unknown_error" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
           exit 1
           ;;
       esac
       
       echo "Plan result: $plan_result"
+      echo "Created plan_status.env with content:"
+      cat ./plan_status.env
     
-    - echo "=== DEBUG INFO ==="
-    - echo "Working directory $(pwd)"
-    - echo "CI_PROJECT_DIR $CI_PROJECT_DIR"
-    - echo "Files in current dir:"
-    - ls -la
-    - echo "Files in CI_PROJECT_DIR:"
-    - ls -la $CI_PROJECT_DIR
-    - echo "Content of plan_status.env:"
-    - cat plan_status.env || echo "File not found"
-
     # Affichage résumé du plan
     - echo "📊 Résumé du plan Terraform:"
     - terraform show -no-color tfplan | head -50
-    
-    # CORRECTION: Créer le fichier plan_status.env dans le bon répertoire
-    - cp ${CI_PROJECT_DIR}/plan_status_${ENV}.env ./plan_status.env
     
     - echo "✅ Planification $ENV terminée avec succès"
     
@@ -209,6 +201,7 @@ plan_prod:
         exit 1
       fi
       
+      # CORRECTION: Gestion propre des exit codes terraform plan
       set +e  # Désactive l'arrêt automatique sur erreur
       terraform plan -out=tfplan -detailed-exitcode
       plan_exit_code=$?
@@ -216,34 +209,34 @@ plan_prod:
       
       echo "Terraform plan exit code: $plan_exit_code"
       
+      # CORRECTION: Créer directement le fichier dans le répertoire courant
       case $plan_exit_code in
         0)
           echo "✅ Aucun changement détecté en production"
-          echo "PLAN_STATUS=no_changes" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=no_changes" > ./plan_status.env
           plan_result="success"
           ;;
         1)
           echo "❌ Erreur lors de la planification production"
-          echo "PLAN_STATUS=error" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=error" > ./plan_status.env
           exit 1
           ;;
         2)
           echo "⚠️  ATTENTION: Changements détectés en PRODUCTION"
-          echo "PLAN_STATUS=changes_detected" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
           terraform show -no-color tfplan
           plan_result="success"
           ;;
         *)
           echo "❌ Code de sortie inattendu: $plan_exit_code"
-          echo "PLAN_STATUS=unknown_error" > ${CI_PROJECT_DIR}/plan_status_${ENV}.env
+          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
           exit 1
           ;;
       esac
       
       echo "Plan result: $plan_result"
-    
-    # Créer le fichier plan_status.env dans le bon répertoire
-    - cp ${CI_PROJECT_DIR}/plan_status_${ENV}.env ./plan_status.env
+      echo "Created plan_status.env with content:"
+      cat ./plan_status.env
     
     - echo "✅ Planification $ENV terminée avec succès"
   
