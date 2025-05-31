@@ -1,9 +1,8 @@
 # =============================================================================
-# PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE (VERSION CORRIGÉE)
+# PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE
 # =============================================================================
 # Description : Pipeline automatisé pour le déploiement IaC
 # Utilise les variables centralisées du module globals
-# CORRECTION : Gestion proper des exit codes et artifacts paths
 # =============================================================================
 
 stages:
@@ -132,7 +131,7 @@ plan_dev:
       
       echo "Terraform plan exit code: $plan_exit_code"
       
-      # CORRECTION: Créer directement le fichier dans le répertoire courant
+
       case $plan_exit_code in
         0)
           echo "✅ Aucun changement détecté"
@@ -226,7 +225,6 @@ plan_prod:
       
       echo "Terraform plan exit code: $plan_exit_code"
       
-      # CORRECTION: Créer directement le fichier dans le répertoire courant
       case $plan_exit_code in
         0)
           echo "✅ Aucun changement détecté en production"
