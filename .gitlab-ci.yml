@@ -158,6 +158,16 @@ plan_dev:
     # Affichage résumé du plan
     - echo "📊 Résumé du plan Terraform:"
     - terraform show -no-color tfplan | head -50
+
+    - echo "=== DEBUG INFO ==="
+    - echo "Working directory $(pwd)"
+    - echo "CI_PROJECT_DIR $CI_PROJECT_DIR"
+    - echo "Files in current dir:"
+    - ls -la
+    - echo "Files in CI_PROJECT_DIR:"
+    - ls -la $CI_PROJECT_DIR
+    - echo "Content of plan_status.env:"
+    - cat plan_status.env || echo "File not found"
     
     # CORRECTION: Créer le fichier plan_status.env dans le bon répertoire
     - cp ${CI_PROJECT_DIR}/plan_status_${ENV}.env ./plan_status.env
