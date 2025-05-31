@@ -160,9 +160,25 @@ plan_dev:
       echo "Created plan_status.env with content:"
       cat ./plan_status.env
     
-    # Affichage résumé du plan
-    - echo "📊 Résumé du plan Terraform:"
-    - terraform show -no-color tfplan | head -50
+    # CORRECTION: Gestion de l'output pour éviter SIGPIPE (exit code 141)
+    - echo "📊 Génération du résumé du plan..."
+    - |
+      # Limiter l'output pour éviter les pipes cassés
+      terraform show -no-color tfplan > plan_output.txt 2>&1 || true
+      
+      # Affichage du résumé (limité)
+      echo "=== RÉSUMÉ DU PLAN TERRAFORM ==="
+      echo "Nombre de lignes du plan: $(wc -l < plan_output.txt)"
+      
+      # Afficher seulement le résumé des changements
+      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
+      
+      # Afficher les premières ressources pour validation
+      echo ""
+      echo "=== APERÇU DES CHANGEMENTS ==="
+      head -30 plan_output.txt
+      echo ""
+      echo "... (plan complet sauvegardé dans plan_output.txt)"
     
     - echo "✅ Planification $ENV terminée avec succès"
     
@@ -170,6 +186,7 @@ plan_dev:
     paths:
       - ${TF_ROOT}/${ENV}/tfplan
       - ${TF_ROOT}/${ENV}/plan_status.env
+      - ${TF_ROOT}/${ENV}/plan_output.txt
     expire_in: 1 week
     reports:
       dotenv: ${TF_ROOT}/${ENV}/plan_status.env
@@ -224,7 +241,7 @@ plan_prod:
         2)
           echo "⚠️  ATTENTION: Changements détectés en PRODUCTION"
           echo "PLAN_STATUS=changes_detected" > ./plan_status.env
-          terraform show -no-color tfplan
+          echo "Plan détaillé sera affiché dans le résumé ci-dessous"
           plan_result="success"
           ;;
         *)
@@ -238,12 +255,33 @@ plan_prod:
       echo "Created plan_status.env with content:"
       cat ./plan_status.env
     
+    # CORRECTION: Gestion de l'output pour éviter SIGPIPE (exit code 141)
+    - echo "📊 Génération du résumé du plan production..."
+    - |
+      # Limiter l'output pour éviter les pipes cassés
+      terraform show -no-color tfplan > plan_output.txt 2>&1 || true
+      
+      # Affichage du résumé (limité)
+      echo "=== RÉSUMÉ DU PLAN TERRAFORM PRODUCTION ==="
+      echo "Nombre de lignes du plan: $(wc -l < plan_output.txt)"
+      
+      # Afficher seulement le résumé des changements
+      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
+      
+      # Afficher les premières ressources pour validation
+      echo ""
+      echo "=== APERÇU DES CHANGEMENTS PRODUCTION ==="
+      head -30 plan_output.txt
+      echo ""
+      echo "... (plan complet sauvegardé dans plan_output.txt)"
+    
     - echo "✅ Planification $ENV terminée avec succès"
   
   artifacts:
     paths:
       - ${TF_ROOT}/${ENV}/tfplan
       - ${TF_ROOT}/${ENV}/plan_status.env
+      - ${TF_ROOT}/${ENV}/plan_output.txt
     expire_in: 1 week
     reports:
       dotenv: ${TF_ROOT}/${ENV}/plan_status.env
