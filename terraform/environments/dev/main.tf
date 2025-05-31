@@ -69,6 +69,7 @@ resource "local_file" "k3s_config" {
     server_ip   = local.server_config.ip
     api_port    = module.globals.ports.k3s_api
     version     = local.versions.k3s
+    ha_enabled  = false  
   })
   filename = "${path.module}/k3s-config.yaml"
   
