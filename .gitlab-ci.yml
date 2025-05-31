@@ -10,6 +10,7 @@ stages:
   - plan
   - apply
   - deploy
+  - sync
   - cleanup
 
 variables:
@@ -477,7 +478,7 @@ ansible_dev:
 
 # Synchronisation vers GitHub
 mirror_to_github:
-  stage: deploy
+  stage: sync
   image: alpine:latest
   before_script:
     - *setup_ssh
@@ -486,7 +487,7 @@ mirror_to_github:
     - git remote add mirror git@github.com:Alb06/IaC.git || true
     - git push mirror HEAD:main --force
     - echo "✅ Synchronisation terminée"
-  
+  needs: []
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
@@ -495,7 +496,7 @@ mirror_to_github:
 
 # Synchronisation des issues (optionnel)
 sync_issues_to_github:
-  stage: deploy
+  stage: sync
   image: python:3.11
   timeout: 10m
   before_script:
@@ -503,7 +504,7 @@ sync_issues_to_github:
   script:
     - echo "🔄 Synchronisation des issues GitLab → GitHub..."
     - python scripts/ci-cd/sync_issues.py
-  
+  needs: []
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
