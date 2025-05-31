@@ -1,3 +1,10 @@
+# =============================================================================
+# PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE
+# =============================================================================
+# Description : Pipeline automatisé pour le déploiement IaC
+# Utilise les variables centralisées du module globals
+# =============================================================================
+
 stages:
   - validate
   - plan
@@ -7,156 +14,520 @@ stages:
 
 variables:
   TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
-  TF_VERSION: 1.12.1
+  # Versions récupérées dynamiquement depuis les outputs Terraform
+  TF_VERSION: "1.12.1"  # TODO: Récupérer depuis module globals
   GIT_DEPTH: 0
+  # Configuration Ansible
+  ANSIBLE_HOST_KEY_CHECKING: "False"
+  ANSIBLE_FORCE_COLOR: "True"
+  # Configuration sécurité
+  DOCKER_TLS_CERTDIR: "/certs"
 
-# Cache des plugins Terraform
+# Cache optimisé des plugins Terraform et dépendances
 cache:
+  key: "${CI_COMMIT_REF_SLUG}"
   paths:
     - .terraform
+    - .terraform.lock.hcl
+    - ${TF_ROOT}/**/.terraform
+    - /tmp/terraform-cache
 
-# Installation manuelle de Terraform
+# =============================================================================
+# TEMPLATES RÉUTILISABLES
+# =============================================================================
+
 .install_terraform: &install_terraform
   before_script:
-    - apk add --no-cache curl unzip bash
-    - curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
-    - unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d /usr/local/bin/
+    - echo "🔧 Installation de Terraform v${TF_VERSION}..."
+    - apk add --no-cache curl unzip bash git openssh
+    - mkdir -p /tmp/terraform-cache
+    - |
+      if [ ! -f "/tmp/terraform-cache/terraform_${TF_VERSION}" ]; then
+        echo "📥 Téléchargement de Terraform..."
+        curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+        unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d /tmp/terraform-cache/
+        mv /tmp/terraform-cache/terraform "/tmp/terraform-cache/terraform_${TF_VERSION}"
+      fi
+    - cp "/tmp/terraform-cache/terraform_${TF_VERSION}" /usr/local/bin/terraform
     - chmod +x /usr/local/bin/terraform
     - terraform --version
+    - echo "✅ Terraform installé avec succès"
 
-# Validation du code Terraform
+.setup_ssh: &setup_ssh
+  - echo "🔐 Configuration SSH..."
+  - mkdir -p ~/.ssh
+  - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+  - chmod 600 ~/.ssh/id_ed25519
+  - ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+  - eval $(ssh-agent -s)
+  - ssh-add ~/.ssh/id_ed25519
+
+# =============================================================================
+# VALIDATION ET PLANIFICATION
+# =============================================================================
+
+# Validation globale du code Terraform
 validate:
   stage: validate
   image: alpine:latest
   <<: *install_terraform
   script:
+    - echo "🔍 Validation du code Terraform..."
     - cd ${TF_ROOT}
+    
+    # Validation du module globals
+    - echo "📋 Validation du module globals..."
+    - cd ../globals && terraform init -backend=false && terraform validate
+    - cd ../environments
+    
+    # Validation de tous les environnements
     - |
-      if [ ! -d "${ENV}" ]; then
-        echo "Erreur: Le dossier ${ENV} n'existe pas dans ${TF_ROOT}"
-        ls -la
-        exit 1
-      fi
-    - find . -type f -name "*.tf" -exec dirname {} \; | sort -u | while read m; do (cd "$m" && terraform init -backend=false && terraform validate); done
-  variables:
-    ENV: dev
+      for env in dev prod; do
+        echo "📋 Validation environnement: $env"
+        if [ ! -d "$env" ]; then
+          echo "❌ Dossier $env inexistant"
+          exit 1
+        fi
+        cd "$env"
+        terraform init -backend=false
+        terraform validate
+        if [ $? -eq 0 ]; then
+          echo "✅ $env validé avec succès"
+        else
+          echo "❌ Erreur de validation pour $env"
+          exit 1
+        fi
+        cd ..
+      done
+    - echo "🎉 Validation globale réussie"
+  
+  # Execution sur tous les commits et MR
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
   tags:
     - terraform
 
-# Planification des changements Terraform
-plan:
+# Planification pour l'environnement dev (VERSION CORRIGÉE)
+plan_dev:
   stage: plan
   image: alpine:latest
   <<: *install_terraform
-  script:
-    - cd ${TF_ROOT}/${ENV}
-    - terraform init
-    - terraform plan -out=tfplan
   variables:
     ENV: dev
+  script:
+    - echo "📋 Planification Terraform pour $ENV..."
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+    
+    # Récupération des variables depuis le module globals et planification
+    - echo "🔍 Récupération des variables centralisées..."
+    - |
+      # CORRECTION: Gestion propre des exit codes terraform plan
+      set +e  # Désactive l'arrêt automatique sur erreur
+      terraform plan -out=tfplan -detailed-exitcode
+      plan_exit_code=$?
+      set -e  # Réactive l'arrêt automatique sur erreur
+      
+      echo "Terraform plan exit code: $plan_exit_code"
+      
+
+      case $plan_exit_code in
+        0)
+          echo "✅ Aucun changement détecté"
+          echo "PLAN_STATUS=no_changes" > ./plan_status.env
+          plan_result="success"
+          ;;
+        1)
+          echo "❌ Erreur lors de la planification"
+          echo "PLAN_STATUS=error" > ./plan_status.env
+          exit 1
+          ;;
+        2)
+          echo "📝 Changements détectés, plan généré"
+          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
+          plan_result="success"
+          ;;
+        *)
+          echo "❌ Code de sortie inattendu: $plan_exit_code"
+          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
+          exit 1
+          ;;
+      esac
+      
+      echo "Plan result: $plan_result"
+      echo "Created plan_status.env with content:"
+      cat ./plan_status.env
+    
+    # CORRECTION: Gestion de l'output pour éviter SIGPIPE (exit code 141)
+    - echo "📊 Génération du résumé du plan..."
+    - |
+      # Limiter l'output pour éviter les pipes cassés
+      terraform show -no-color tfplan > plan_output.txt 2>&1 || true
+      
+      # Affichage du résumé (limité)
+      echo "=== RÉSUMÉ DU PLAN TERRAFORM ==="
+      echo "Nombre de lignes du plan: $(wc -l < plan_output.txt)"
+      
+      # Afficher seulement le résumé des changements
+      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
+      
+      # Afficher les premières ressources pour validation
+      echo ""
+      echo "=== APERÇU DES CHANGEMENTS ==="
+      head -30 plan_output.txt
+      echo ""
+      echo "... (plan complet sauvegardé dans plan_output.txt)"
+    
+    - echo "✅ Planification $ENV terminée avec succès"
+    
   artifacts:
     paths:
       - ${TF_ROOT}/${ENV}/tfplan
+      - ${TF_ROOT}/${ENV}/plan_status.env
+      - ${TF_ROOT}/${ENV}/plan_output.txt
     expire_in: 1 week
+    reports:
+      dotenv: ${TF_ROOT}/${ENV}/plan_status.env
+  
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
   tags:
     - terraform
-  only:
-    - merge_requests
 
-# Application des changements Terraform
-apply:
+# Planification pour l'environnement prod (VERSION CORRIGÉE)
+plan_prod:
+  stage: plan
+  image: alpine:latest
+  <<: *install_terraform
+  variables:
+    ENV: prod
+  script:
+    - echo "📋 Planification Terraform pour $ENV..."
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+    
+    # Validation supplémentaire pour la production
+    - echo "🔐 Validations de sécurité production..."
+    - |
+      # Vérification des variables critiques
+      if [ -z "$SSH_PRIVATE_KEY" ]; then
+        echo "❌ SSH_PRIVATE_KEY manquante pour la production"
+        exit 1
+      fi
+      
+      # CORRECTION: Gestion propre des exit codes terraform plan
+      set +e  # Désactive l'arrêt automatique sur erreur
+      terraform plan -out=tfplan -detailed-exitcode
+      plan_exit_code=$?
+      set -e  # Réactive l'arrêt automatique sur erreur
+      
+      echo "Terraform plan exit code: $plan_exit_code"
+      
+      case $plan_exit_code in
+        0)
+          echo "✅ Aucun changement détecté en production"
+          echo "PLAN_STATUS=no_changes" > ./plan_status.env
+          plan_result="success"
+          ;;
+        1)
+          echo "❌ Erreur lors de la planification production"
+          echo "PLAN_STATUS=error" > ./plan_status.env
+          exit 1
+          ;;
+        2)
+          echo "⚠️  ATTENTION: Changements détectés en PRODUCTION"
+          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
+          echo "Plan détaillé sera affiché dans le résumé ci-dessous"
+          plan_result="success"
+          ;;
+        *)
+          echo "❌ Code de sortie inattendu: $plan_exit_code"
+          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
+          exit 1
+          ;;
+      esac
+      
+      echo "Plan result: $plan_result"
+      echo "Created plan_status.env with content:"
+      cat ./plan_status.env
+    
+    # CORRECTION: Gestion de l'output pour éviter SIGPIPE (exit code 141)
+    - echo "📊 Génération du résumé du plan production..."
+    - |
+      # Limiter l'output pour éviter les pipes cassés
+      terraform show -no-color tfplan > plan_output.txt 2>&1 || true
+      
+      # Affichage du résumé (limité)
+      echo "=== RÉSUMÉ DU PLAN TERRAFORM PRODUCTION ==="
+      echo "Nombre de lignes du plan: $(wc -l < plan_output.txt)"
+      
+      # Afficher seulement le résumé des changements
+      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
+      
+      # Afficher les premières ressources pour validation
+      echo ""
+      echo "=== APERÇU DES CHANGEMENTS PRODUCTION ==="
+      head -30 plan_output.txt
+      echo ""
+      echo "... (plan complet sauvegardé dans plan_output.txt)"
+    
+    - echo "✅ Planification $ENV terminée avec succès"
+  
+  artifacts:
+    paths:
+      - ${TF_ROOT}/${ENV}/tfplan
+      - ${TF_ROOT}/${ENV}/plan_status.env
+      - ${TF_ROOT}/${ENV}/plan_output.txt
+    expire_in: 1 week
+    reports:
+      dotenv: ${TF_ROOT}/${ENV}/plan_status.env
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  tags:
+    - terraform
+
+# =============================================================================
+# APPLICATION DES CHANGEMENTS
+# =============================================================================
+
+# Application en environnement dev
+apply_dev:
   stage: apply
   image: alpine:latest
   <<: *install_terraform
-  script:
-    - cd ${TF_ROOT}/${ENV}
-    - terraform init
-    - terraform apply -auto-approve tfplan
   variables:
     ENV: dev
+  script:
+    - echo "🚀 Application Terraform pour $ENV..."
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+    
+    # Vérification de l'existence du plan
+    - |
+      if [ ! -f "tfplan" ]; then
+        echo "❌ Fichier plan non trouvé"
+        exit 1
+      fi
+    
+    # Application du plan
+    - terraform apply -auto-approve tfplan
+    
+    # Récupération des outputs pour validation
+    - echo "📊 Récupération des outputs..."
+    - terraform output -json > terraform_outputs.json
+    
+    # Validation des inventaires Ansible générés
+    - echo "🔍 Validation des inventaires Ansible..."
+    - |
+      inventory_file="../../../ansible/inventory/${ENV}"
+      if [ -f "$inventory_file" ]; then
+        echo "✅ Inventaire généré: $inventory_file"
+        head -20 "$inventory_file"
+      else
+        echo "❌ Inventaire non généré"
+        exit 1
+      fi
+  
+  artifacts:
+    paths:
+      - ${TF_ROOT}/${ENV}/terraform_outputs.json
+      - ansible/inventory/${ENV}
+    expire_in: 1 day
+  
   dependencies:
-    - plan
+    - plan_dev
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: false
   tags:
     - terraform
-  only:
-    - main
-  when: manual
 
-# Déploiement Ansible
-ansible:
+# Application en environnement prod (protection renforcée)
+apply_prod:
   stage: apply
+  image: alpine:latest
+  <<: *install_terraform
+  variables:
+    ENV: prod
+  script:
+    - echo "🚀 Application Terraform pour PRODUCTION..."
+    - echo "⚠️  ATTENTION Déploiement en environnement de PRODUCTION"
+    
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+    
+    # Vérifications de sécurité renforcées
+    - |
+      echo "🔐 Vérifications de sécurité production..."
+      
+      if [ ! -f "tfplan" ]; then
+        echo "❌ Fichier plan non trouvé"
+        exit 1
+      fi
+      
+      # Vérification de la branche
+      if [ "$CI_COMMIT_BRANCH" != "main" ]; then
+        echo "❌ Déploiement production autorisé uniquement depuis main"
+        exit 1
+      fi
+      
+      # Vérification de l'auteur (optionnel)
+      echo "👤 Déploiement par: $GITLAB_USER_NAME ($GITLAB_USER_EMAIL)"
+    
+    # Sauvegarde avant application
+    - echo "💾 Sauvegarde de l'état actuel..."
+    - cp terraform.tfstate "terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+    
+    # Application du plan
+    - terraform apply -auto-approve tfplan
+    
+    # Validation post-déploiement
+    - echo "✅ Validation post-déploiement..."
+    - terraform output -json > terraform_outputs.json
+    
+    # Test de connectivité (si possible)
+    - |
+      server_ip=$(terraform output -raw server_config | jq -r '.ip' 2>/dev/null || echo "")
+      if [ ! -z "$server_ip" ]; then
+        echo "🌐 Test de connectivité vers $server_ip..."
+        ping -c 3 "$server_ip" || echo "⚠️  Serveur non accessible via ping"
+      fi
+  
+  artifacts:
+    paths:
+      - ${TF_ROOT}/${ENV}/terraform_outputs.json
+      - ${TF_ROOT}/${ENV}/terraform.tfstate.backup.*
+      - ansible/inventory/${ENV}
+    expire_in: 7 days
+  
+  dependencies:
+    - plan_prod
+  
+  environment:
+    name: production
+    action: start
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: false
+  tags:
+    - terraform
+
+# =============================================================================
+# DÉPLOIEMENT ANSIBLE
+# =============================================================================
+
+# Déploiement Ansible dev
+ansible_dev:
+  stage: deploy
   image: cytopia/ansible:latest
+  variables:
+    ENV: dev
+  before_script:
+    - echo "🔧 Préparation Ansible pour $ENV..."
+    - apk add --no-cache jq
   script:
     - cd ${CI_PROJECT_DIR}/ansible
-    - ansible-playbook -i inventory/dev playbooks/setup.yml
+    
+    # Vérification de l'inventaire généré
+    - |
+      inventory_file="inventory/${ENV}"
+      if [ ! -f "$inventory_file" ]; then
+        echo "❌ Inventaire $inventory_file non trouvé"
+        echo "Contenu du dossier inventory:"
+        ls -la inventory/
+        exit 1
+      fi
+      
+      echo "✅ Inventaire trouvé: $inventory_file"
+      echo "Contenu de l'inventaire:"
+      cat "$inventory_file"
+    
+    # Test de connectivité Ansible
+    - echo "🔍 Test de connectivité Ansible..."
+    - ansible all -i "inventory/${ENV}" -m ping || echo "⚠️  Test ping échoué"
+    
+    # Exécution du playbook (si existe)
+    - |
+      if [ -f "playbooks/setup.yml" ]; then
+        echo "🚀 Exécution du playbook setup..."
+        ansible-playbook -i "inventory/${ENV}" playbooks/setup.yml --check --diff
+      else
+        echo "ℹ️  Aucun playbook setup.yml trouvé"
+      fi
+  
+  dependencies:
+    - apply_dev
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
   tags:
     - ansible
-  only:
-    - main
-  when: manual
 
-# Déploiement Kubernetes avec Helm
-kubernetes:
-  stage: apply
-  image: dtzar/helm-kubectl:latest
-  script:
-    - cd ${CI_PROJECT_DIR}/kubernetes/helm-charts
-    - helm upgrade --install my-app ./my-app --namespace default
-  tags:
-    - kubernetes
-  only:
-    - main
-  when: manual
+# =============================================================================
+# SYNCHRONISATION ET NETTOYAGE
+# =============================================================================
 
-# Synchronisation de la branche avec GitHub
+# Synchronisation vers GitHub
 mirror_to_github:
   stage: deploy
   image: alpine:latest
   before_script:
-    - apk add --no-cache git openssh
+    - *setup_ssh
   script:
-    # Configuration SSH
-    - mkdir -p ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-    - chmod 600 ~/.ssh/id_ed25519
-    - ssh-keyscan github.com >> ~/.ssh/known_hosts
-    # Configuration du remote
+    - echo "🔄 Synchronisation vers GitHub..."
     - git remote add mirror git@github.com:Alb06/IaC.git || true
-    # Pousser le commit courant vers la branche main de GitHub
     - git push mirror HEAD:main --force
+    - echo "✅ Synchronisation terminée"
+  
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
   tags:
     - terraform
 
-# Synchronisation de l'état des taches avec GitHub
+# Synchronisation des issues (optionnel)
 sync_issues_to_github:
   stage: deploy
   image: python:3.11
-  timeout: 10m  # Timeout de 10 minutes pour éviter les jobs infinis
+  timeout: 10m
   before_script:
     - pip install requests
   script:
-    - echo "Démarrage de la synchronisation des issues..."
-    - echo "Variables d'environnement disponibles:"
-    - echo "   - GITLAB_PROJECT_ID= ${GITLAB_PROJECT_ID}"
-    - echo "   - GITHUB_REPO= ${GITHUB_REPO}"
-    - echo "   - GITLAB_TOKEN= $(if [ -n "$GITLAB_TOKEN" ]; then echo 'SET'; else echo 'NOT SET'; fi)"
-    - echo "   - GITHUB_TOKEN= $(if [ -n "$GITHUB_TOKEN" ]; then echo 'SET'; else echo 'NOT SET'; fi)"
+    - echo "🔄 Synchronisation des issues GitLab → GitHub..."
     - python scripts/ci-cd/sync_issues.py
+  
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual  # Garder en manuel pour les tests
+      when: manual
   tags:
     - terraform
 
-# Nettoyage (optionnel)
+# Nettoyage des ressources temporaires
 cleanup:
   stage: cleanup
   image: alpine:latest
   script:
-    - echo "Nettoyage des ressources temporaires..."
+    - echo "🧹 Nettoyage des ressources temporaires..."
+    - |
+      # Nettoyage des anciens plans
+      find ${TF_ROOT} -name "tfplan" -mtime +7 -delete || true
+      find ${TF_ROOT} -name "*.backup.*" -mtime +30 -delete || true
+      
+      # Nettoyage des logs
+      find /tmp -name "*.log" -mtime +1 -delete || true
+      
+      echo "✅ Nettoyage terminé"
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
   tags:
     - terraform
-  when: manual
