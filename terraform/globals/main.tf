@@ -6,15 +6,7 @@
 # Version     : 1.0.0
 # =============================================================================
 
-terraform {
-  required_version = ">= 1.12.1"
-  required_providers {
-    local = {
-      source  = "hashicorp/local"
-      version = "~> 2.0"
-    }
-  }
-}
+# NOTE: Les contraintes Terraform sont maintenant dans versions.tf
 
 # =============================================================================
 # VARIABLES GLOBALES CENTRALISÉES
@@ -45,7 +37,7 @@ locals {
     }
   }
 
-  # Versions des outils et services
+  # Versions exactes des outils et services (maintenu depuis versions.tf)
   versions = {
     terraform     = "1.12.1"
     k3s          = "v1.33.1+k3s1"
