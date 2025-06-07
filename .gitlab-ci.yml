@@ -38,12 +38,9 @@ cache:
 # TEMPLATES RÉUTILISABLES
 # =============================================================================
 
-.get_tf_version: &get_tf_version
-  - export TF_VERSION=$(terraform output -raw versions | jq -r '.terraform') 
-
 .install_terraform: &install_terraform
-  <<: *get_tf_version 
   before_script:
+    - export TF_VERSION=$(terraform output -raw versions | jq -r '.terraform') 
     - echo "🔧 Installation de Terraform v${TF_VERSION}..."
     - apk add --no-cache curl unzip bash git openssh
     - mkdir -p /tmp/terraform-cache
