@@ -23,36 +23,66 @@ variables:
   ANSIBLE_FORCE_COLOR: "True"
   # Configuration sécurité
   DOCKER_TLS_CERTDIR: "/certs"
+  # Optimisation pour shared runners
+  DOCKER_DRIVER: overlay2
+  FF_USE_FASTZIP: "true"
+  ARTIFACT_COMPRESSION_LEVEL: "fast"
+  CACHE_COMPRESSION_LEVEL: "fast"
 
-# Cache optimisé des plugins Terraform et dépendances
+# Cache optimisé pour shared runners
 cache:
-  key: "${CI_COMMIT_REF_SLUG}"
+  key: 
+    files:
+      - terraform/**/*.tf
+      - .gitlab-ci.yml
   paths:
     - .terraform
     - .terraform.lock.hcl
     - ${TF_ROOT}/**/.terraform
-    - /tmp/terraform-cache
+  policy: pull-push
+  when: always
 
 # =============================================================================
 # TEMPLATES RÉUTILISABLES
 # =============================================================================
 
+# .install_terraform: &install_terraform
+#   before_script:
+#     - echo "🔧 Installation de Terraform v${TF_VERSION}..."
+#     - apk add --no-cache curl unzip bash git openssh
+#     - mkdir -p /tmp/terraform-cache
+#     - |
+#       if [ ! -f "/tmp/terraform-cache/terraform_${TF_VERSION}" ]; then
+#         echo "📥 Téléchargement de Terraform..."
+#         curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+#         unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d /tmp/terraform-cache/
+#         mv /tmp/terraform-cache/terraform "/tmp/terraform-cache/terraform_${TF_VERSION}"
+#       fi
+#     - cp "/tmp/terraform-cache/terraform_${TF_VERSION}" /usr/local/bin/terraform
+#     - chmod +x /usr/local/bin/terraform
+#     - terraform --version
+#     - echo "✅ Terraform installé avec succès"
+
 .install_terraform: &install_terraform
   before_script:
-    - echo "🔧 Installation de Terraform v${TF_VERSION}..."
-    - apk add --no-cache curl unzip bash git openssh
-    - mkdir -p /tmp/terraform-cache
+    - echo "🔧 Installation de Terraform v${TF_VERSION} sur shared runner..."
+    - apk add --no-cache curl unzip bash git openssh ca-certificates
+    
+    # Cache plus agressif pour shared runners
+    - export TF_CACHE_DIR="/tmp/terraform-cache-${TF_VERSION}"
+    - mkdir -p "$TF_CACHE_DIR"
+    
     - |
-      if [ ! -f "/tmp/terraform-cache/terraform_${TF_VERSION}" ]; then
+      if [ ! -f "$TF_CACHE_DIR/terraform" ]; then
         echo "📥 Téléchargement de Terraform..."
         curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
-        unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d /tmp/terraform-cache/
-        mv /tmp/terraform-cache/terraform "/tmp/terraform-cache/terraform_${TF_VERSION}"
+        unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d "$TF_CACHE_DIR/"
+        chmod +x "$TF_CACHE_DIR/terraform"
       fi
-    - cp "/tmp/terraform-cache/terraform_${TF_VERSION}" /usr/local/bin/terraform
-    - chmod +x /usr/local/bin/terraform
+    
+    - cp "$TF_CACHE_DIR/terraform" /usr/local/bin/terraform
     - terraform --version
-    - echo "✅ Terraform installé avec succès"
+    - echo "✅ Terraform installé avec succès sur shared runner"
 
 .setup_ssh: &setup_ssh
   - echo "🔐 Configuration SSH..."
@@ -70,6 +100,7 @@ cache:
 validate:
   stage: validate
   image: alpine:latest
+  timeout: 3m
   <<: *install_terraform
   script:
     - echo "🔍 Validation du code Terraform..."
@@ -105,13 +136,14 @@ validate:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # Planification pour l'environnement dev (VERSION CORRIGÉE)
 plan_dev:
   stage: plan
   image: alpine:latest
+  timeout: 3m  
   <<: *install_terraform
   variables:
     ENV: dev
@@ -193,13 +225,14 @@ plan_dev:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # Planification pour l'environnement prod (VERSION CORRIGÉE)
 plan_prod:
   stage: plan
   image: alpine:latest
+  timeout: 3m
   <<: *install_terraform
   variables:
     ENV: prod
@@ -286,8 +319,8 @@ plan_prod:
   
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # =============================================================================
 # APPLICATION DES CHANGEMENTS
@@ -297,6 +330,7 @@ plan_prod:
 apply_dev:
   stage: apply
   image: alpine:latest
+  timeout: 3m  
   <<: *install_terraform
   variables:
     ENV: dev
@@ -344,13 +378,14 @@ apply_dev:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: false
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # Application en environnement prod (protection renforcée)
 apply_prod:
   stage: apply
   image: alpine:latest
+  timeout: 3m
   <<: *install_terraform
   variables:
     ENV: prod
@@ -416,8 +451,8 @@ apply_prod:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: false
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # =============================================================================
 # DÉPLOIEMENT ANSIBLE
@@ -479,6 +514,7 @@ ansible_dev:
 mirror_to_github:
   stage: sync
   image: alpine:latest
+  timeout: 3m
   before_script:
     - *setup_ssh
   script:
@@ -490,14 +526,14 @@ mirror_to_github:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # Synchronisation des issues (optionnel)
 sync_issues_to_github:
   stage: sync
   image: python:3.11
-  timeout: 10m
+  timeout: 3m
   before_script:
     - pip install requests
   script:
@@ -507,13 +543,14 @@ sync_issues_to_github:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # Nettoyage des ressources temporaires
 cleanup:
   stage: cleanup
   image: alpine:latest
+  timeout: 3m
   script:
     - echo "🧹 Nettoyage des ressources temporaires..."
     - |
@@ -529,5 +566,5 @@ cleanup:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
