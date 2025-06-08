@@ -3,17 +3,9 @@
 # =============================================================================
 # Description : Configuration Terraform pour l'environnement de développement
 # Utilise le module globals pour la centralisation des variables
+# NOTE: Les contraintes Terraform sont définies dans versions.tf
 # =============================================================================
 
-terraform {
-  required_version = ">= 1.12.1"
-  required_providers {
-    local = {
-      source  = "hashicorp/local"
-      version = "~> 2.0"
-    }
-  }
-}
 
 # =============================================================================
 # MODULE GLOBALS - VARIABLES CENTRALISÉES
@@ -42,6 +34,10 @@ locals {
   
   # Configuration spécifique dev
   env_config = module.globals.environment_config
+  
+  # 🆕 Nouvelles variables pour les contraintes de versions
+  terraform_constraints = module.globals.terraform_constraints
+  version_metadata     = module.globals.version_metadata
 }
 
 # =============================================================================
@@ -88,8 +84,26 @@ export TERRAFORM_VERSION=${local.versions.terraform}
 export HELM_VERSION=${local.versions.helm}
 export CLUSTER_NAME=${module.globals.kubernetes.cluster_name}
 export DOMAIN=${local.network.domain}
+
+# 🆕 Variables contraintes Terraform
+export TF_REQUIRED_VERSION="${local.terraform_constraints.terraform_version}"
+export TF_PROVIDER_LOCAL="${local.terraform_constraints.provider_versions.local}"
+export TF_PROVIDER_NULL="${local.terraform_constraints.provider_versions.null}"
 EOT
 
   filename = "${path.module}/.env"
+  file_permission = "0644"
+}
+
+# 🆕 Fichier de validation des contraintes de versions
+resource "local_file" "version_constraints" {
+  content = jsonencode({
+    terraform_constraints = local.terraform_constraints
+    version_metadata     = local.version_metadata
+    validation_status    = module.globals.version_validation
+    generated_at         = timestamp()
+  })
+  
+  filename = "${path.module}/version-constraints.json"
   file_permission = "0644"
 }
