@@ -110,9 +110,9 @@ validate_versions:
     - |
       echo "📋 Vérification de la présence des fichiers versions.tf..."
       
-      required_files=("terraform/globals/versions.tf", "terraform/environments/dev/versions.tf", "terraform/environments/prod/versions.tf")
+      required_files="terraform/globals/versions.tf terraform/environments/dev/versions.tf terraform/environments/prod/versions.tf"
       
-      for file in "${required_files[@]}"; do
+      for file in $required_files; do
         if [ ! -f "$file" ]; then
           echo "❌ Fichier manquant: $file"
           exit 1
@@ -124,7 +124,9 @@ validate_versions:
     # Vérification du formatage des fichiers versions.tf
     - |
       echo "📋 Validation du formatage des fichiers versions.tf..."
-      for versions_file in $(find terraform/ -name "versions.tf"); do
+      versions_files=$(find terraform/ -name "versions.tf")
+
+      for versions_file in $versions_files; do
         echo "🔧 Formatage: $versions_file"
         terraform fmt -check=true -diff=true "$versions_file"
         if [ $? -ne 0 ]; then
@@ -168,12 +170,15 @@ validate_versions:
       fi
       
       # Validation que les contraintes respectent la version minimale
-      if [[ "$dev_tf_version" == *"1.12.1"* ]]; then
-        echo "✅ Contraintes respectent la version minimale 1.12.1"
-      else
-        echo "❌ Contraintes ne respectent pas la version minimale 1.12.1"
-        exit 1
-      fi
+      case "$dev_tf_version" in
+        *"1.12.1"*)
+          echo "✅ Contraintes respectent la version minimale 1.12.1"
+          ;;
+        *)
+          echo "❌ Contraintes ne respectent pas la version minimale 1.12.1"
+          exit 1
+          ;;
+      esac
       
       echo "✅ Contraintes cohérentes entre tous les environnements"
     
