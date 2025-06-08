@@ -110,11 +110,7 @@ validate_versions:
     - |
       echo "📋 Vérification de la présence des fichiers versions.tf..."
       
-      required_files=(
-        "terraform/globals/versions.tf"
-        "terraform/environments/dev/versions.tf"
-        "terraform/environments/prod/versions.tf"
-      )
+      required_files=("terraform/globals/versions.tf", "terraform/environments/dev/versions.tf", "terraform/environments/prod/versions.tf")
       
       for file in "${required_files[@]}"; do
         if [ ! -f "$file" ]; then
