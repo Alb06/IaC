@@ -242,8 +242,8 @@ validate_versions:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-  tags:
-    - terraform
+  # tags:
+  #   - terraform
 
 # Validation globale du code Terraform (mise à jour)
 validate:
