@@ -17,7 +17,7 @@ stages:
 variables:
   TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
   # Versions récupérées dynamiquement depuis les outputs Terraform
-  TF_VERSION: ""
+  TF_VERSION: "1.12.1"
   GIT_DEPTH: 0
   # Configuration Ansible
   ANSIBLE_HOST_KEY_CHECKING: "False"
@@ -66,7 +66,6 @@ cache:
 
 .install_terraform: &install_terraform
   before_script:
-    - export TF_VERSION=$(terraform output -raw versions | jq -r '.terraform') 
     - echo "🔧 Installation de Terraform v${TF_VERSION}..."
     - apk add --no-cache curl unzip bash git openssh ca-certificates
     
