@@ -32,14 +32,10 @@ variables:
 
 # Cache optimisé pour shared runners
 cache:
-  key: 
-    files:
-      - terraform/**/*.tf
-      - .gitlab-ci.yml
+  key: "terraform-${CI_COMMIT_REF_SLUG}-${ENV:-global}"
   paths:
-    - .terraform
-    - .terraform.lock.hcl
-    - ${TF_ROOT}/**/.terraform
+    - ${TF_ROOT}/${ENV:-**}/.terraform
+    - ${TF_ROOT}/${ENV:-**}/.terraform.lock.hcl
   policy: pull-push
   when: always
 
@@ -47,6 +43,7 @@ cache:
 # TEMPLATES RÉUTILISABLES
 # =============================================================================
 
+# Version runner self-hosted
 # .install_terraform: &install_terraform
 #   before_script:
 #     - echo "🔧 Installation de Terraform v${TF_VERSION}..."
@@ -64,8 +61,19 @@ cache:
 #     - terraform --version
 #     - echo "✅ Terraform installé avec succès"
 
+# Version runner shared
 .install_terraform: &install_terraform
   before_script:
+    - echo "🔍 Diagnostic cache Terraform..."
+    - |
+      echo "Contenu du répertoire de travail:"
+      find . -name ".terraform*" -type f -o -name ".terraform" -type d | head -10
+      
+      echo "Variables d'environnement pertinentes:"
+      echo "TF_ROOT: ${TF_ROOT}"
+      echo "CI_PROJECT_DIR: ${CI_PROJECT_DIR}"
+      echo "PWD: $(pwd)"
+      
     - echo "🔧 Installation de Terraform v${TF_VERSION}..."
     - apk add --no-cache curl unzip bash git openssh ca-certificates
     
