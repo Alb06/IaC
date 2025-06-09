@@ -1,0 +1,202 @@
+# Planification pour l'environnement dev (VERSION CORRIGÉE)
+plan_dev:
+  stage: plan
+  image: alpine:latest
+  timeout: 3m  
+  <<: *install_terraform
+  variables:
+    ENV: dev
+  script:
+    - echo "📋 Planification Terraform pour $ENV avec contraintes centralisées..."
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+    
+    # Vérification des contraintes appliquées
+    - |
+      echo "🔍 Vérification des contraintes Terraform appliquées..."
+      terraform version
+      echo "Contraintes du fichier versions.tf:"
+      cat versions.tf | grep -E "(required_version|version)"
+    
+    # Récupération des variables depuis le module globals et planification
+    - echo "🔍 Récupération des variables centralisées..."
+    - |
+      # CORRECTION: Gestion propre des exit codes terraform plan
+      set +e  # Désactive l'arrêt automatique sur erreur
+      terraform plan -out=tfplan -detailed-exitcode
+      plan_exit_code=$?
+      set -e  # Réactive l'arrêt automatique sur erreur
+      
+      echo "Terraform plan exit code: $plan_exit_code"
+      
+      case $plan_exit_code in
+        0)
+          echo "✅ Aucun changement détecté"
+          echo "PLAN_STATUS=no_changes" > ./plan_status.env
+          plan_result="success"
+          ;;
+        1)
+          echo "❌ Erreur lors de la planification"
+          echo "PLAN_STATUS=error" > ./plan_status.env
+          exit 1
+          ;;
+        2)
+          echo "📝 Changements détectés, plan généré"
+          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
+          plan_result="success"
+          ;;
+        *)
+          echo "❌ Code de sortie inattendu: $plan_exit_code"
+          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
+          exit 1
+          ;;
+      esac
+      
+      echo "Plan result: $plan_result"
+      echo "Created plan_status.env with content:"
+      cat ./plan_status.env
+    
+    # CORRECTION: Gestion de l'output pour éviter SIGPIPE (exit code 141)
+    - echo "📊 Génération du résumé du plan..."
+    - |
+      # Limiter l'output pour éviter les pipes cassés
+      terraform show -no-color tfplan > plan_output.txt 2>&1 || true
+      
+      # Affichage du résumé (limité)
+      echo "=== RÉSUMÉ DU PLAN TERRAFORM (avec versions centralisées) ==="
+      echo "Nombre de lignes du plan: $(wc -l < plan_output.txt)"
+      
+      # Afficher seulement le résumé des changements
+      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
+      
+      # Afficher les premières ressources pour validation
+      echo ""
+      echo "=== APERÇU DES CHANGEMENTS ==="
+      head -30 plan_output.txt
+      echo ""
+      echo "... (plan complet sauvegardé dans plan_output.txt)"
+    
+    - echo "✅ Planification $ENV terminée avec succès"
+    
+  artifacts:
+    paths:
+      - ${TF_ROOT}/${ENV}/tfplan
+      - ${TF_ROOT}/${ENV}/plan_status.env
+      - ${TF_ROOT}/${ENV}/plan_output.txt
+    expire_in: 1 week
+    reports:
+      dotenv: ${TF_ROOT}/${ENV}/plan_status.env
+  
+  dependencies:
+    - validate_versions
+    - validate
+  
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  # tags:
+  #   - terraform
+
+# Planification pour l'environnement prod (VERSION CORRIGÉE)
+plan_prod:
+  stage: plan
+  image: alpine:latest
+  timeout: 3m
+  <<: *install_terraform
+  variables:
+    ENV: prod
+  script:
+    - echo "📋 Planification Terraform pour $ENV avec contraintes centralisées..."
+    - cd ${TF_ROOT}/${ENV}
+    - terraform init
+    
+    # Validation supplémentaire pour la production
+    - echo "🔐 Validations de sécurité production..."
+    - |
+      # Vérification des variables critiques
+      if [ -z "$SSH_PRIVATE_KEY" ]; then
+        echo "❌ SSH_PRIVATE_KEY manquante pour la production"
+        exit 1
+      fi
+      
+      # Vérification des contraintes appliquées en production
+      echo "🔍 Vérification des contraintes Terraform production..."
+      terraform version
+      echo "Contraintes du fichier versions.tf:"
+      cat versions.tf | grep -E "(required_version|version)"
+      
+      # CORRECTION: Gestion propre des exit codes terraform plan
+      set +e  # Désactive l'arrêt automatique sur erreur
+      terraform plan -out=tfplan -detailed-exitcode
+      plan_exit_code=$?
+      set -e  # Réactive l'arrêt automatique sur erreur
+      
+      echo "Terraform plan exit code: $plan_exit_code"
+      
+      case $plan_exit_code in
+        0)
+          echo "✅ Aucun changement détecté en production"
+          echo "PLAN_STATUS=no_changes" > ./plan_status.env
+          plan_result="success"
+          ;;
+        1)
+          echo "❌ Erreur lors de la planification production"
+          echo "PLAN_STATUS=error" > ./plan_status.env
+          exit 1
+          ;;
+        2)
+          echo "⚠️  ATTENTION: Changements détectés en PRODUCTION"
+          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
+          echo "Plan détaillé sera affiché dans le résumé ci-dessous"
+          plan_result="success"
+          ;;
+        *)
+          echo "❌ Code de sortie inattendu: $plan_exit_code"
+          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
+          exit 1
+          ;;
+      esac
+      
+      echo "Plan result: $plan_result"
+      echo "Created plan_status.env with content:"
+      cat ./plan_status.env
+    
+    # CORRECTION: Gestion de l'output pour éviter SIGPIPE (exit code 141)
+    - echo "📊 Génération du résumé du plan production..."
+    - |
+      # Limiter l'output pour éviter les pipes cassés
+      terraform show -no-color tfplan > plan_output.txt 2>&1 || true
+      
+      # Affichage du résumé (limité)
+      echo "=== RÉSUMÉ DU PLAN TERRAFORM PRODUCTION (avec versions centralisées) ==="
+      echo "Nombre de lignes du plan: $(wc -l < plan_output.txt)"
+      
+      # Afficher seulement le résumé des changements
+      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
+      
+      # Afficher les premières ressources pour validation
+      echo ""
+      echo "=== APERÇU DES CHANGEMENTS PRODUCTION ==="
+      head -30 plan_output.txt
+      echo ""
+      echo "... (plan complet sauvegardé dans plan_output.txt)"
+    
+    - echo "✅ Planification $ENV terminée avec succès"
+  
+  artifacts:
+    paths:
+      - ${TF_ROOT}/${ENV}/tfplan
+      - ${TF_ROOT}/${ENV}/plan_status.env
+      - ${TF_ROOT}/${ENV}/plan_output.txt
+    expire_in: 1 week
+    reports:
+      dotenv: ${TF_ROOT}/${ENV}/plan_status.env
+  
+  dependencies:
+    - validate_versions
+    - validate
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  # tags:
+  #   - terraform
