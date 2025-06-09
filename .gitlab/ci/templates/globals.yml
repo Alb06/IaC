@@ -1,0 +1,187 @@
+# =============================================================================
+# TEMPLATES GLOBAUX RÉUTILISABLES - GITLAB CI/CD
+# =============================================================================
+# Description : Templates transverses pour éliminer les duplications
+# Version     : 1.0.0
+# Auteur      : Infrastructure Team
+# =============================================================================
+
+# =============================================================================
+# CONFIGURATION SSH RÉUTILISABLE
+# =============================================================================
+
+.setup_ssh:
+  before_script:
+    - echo "🔐 Configuration SSH standardisée..."
+    - apk add --no-cache git openssh ca-certificates
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keyscan github.com >> ~/.ssh/known_hosts
+    - echo "✅ Configuration SSH terminée"
+
+# =============================================================================
+# GESTION STANDARD DES ARTIFACTS
+# =============================================================================
+
+.standard_artifacts:
+  artifacts:
+    expire_in: 1 week
+    when: always
+    exclude:
+      - "**/*.log"
+      - "**/node_modules/**"
+      - "**/.terraform/providers/**"
+      - "**/terraform.tfstate.backup.*"
+
+.artifacts_short:
+  extends: .standard_artifacts
+  artifacts:
+    expire_in: 1 day
+
+.artifacts_long:
+  extends: .standard_artifacts
+  artifacts:
+    expire_in: 7 days
+
+# =============================================================================
+# RULES STANDARDISÉES PAR ENVIRONNEMENT
+# =============================================================================
+
+.rules_dev:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+.rules_prod:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+.rules_manual_dev:
+  extends: .rules_dev
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: false
+
+.rules_manual_prod:
+  extends: .rules_prod
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: false
+
+.rules_sync:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always
+
+# =============================================================================
+# GESTION D'ERREURS STANDARDISÉE
+# =============================================================================
+
+.error_handling:
+  variables:
+    ERROR_REPORTING: "true"
+  after_script:
+    - |
+      if [ "$CI_JOB_STATUS" = "failed" ]; then
+        echo "❌ Job échoué: $CI_JOB_NAME"
+        echo "📋 Commit: $CI_COMMIT_SHA"
+        echo "🌿 Branche: $CI_COMMIT_BRANCH"
+        echo "👤 Auteur: $GITLAB_USER_NAME"
+        
+        # Sauvegarde des logs d'erreur pour debug
+        mkdir -p /tmp/error_logs 2>/dev/null || true
+        find . -name "*.log" -type f -exec cp {} /tmp/error_logs/ \; 2>/dev/null || true
+        
+        echo "🔍 Logs d'erreur sauvegardés dans /tmp/error_logs/"
+      fi
+
+# =============================================================================
+# TIMEOUTS STANDARDISÉS
+# =============================================================================
+
+.timeout_short:
+  timeout: 3m
+
+.timeout_medium:
+  timeout: 5m
+
+.timeout_long:
+  timeout: 10m
+
+# =============================================================================
+# TEMPLATES DE BASE PAR STAGE
+# =============================================================================
+
+.base_validate:
+  stage: validate
+  extends: 
+    - .timeout_short
+    - .error_handling
+    - .standard_artifacts
+
+.base_plan:
+  stage: plan
+  extends:
+    - .timeout_medium
+    - .error_handling
+    - .standard_artifacts
+
+.base_apply:
+  stage: apply
+  extends:
+    - .timeout_medium
+    - .error_handling
+    - .artifacts_long
+
+.base_deploy:
+  stage: deploy
+  extends:
+    - .timeout_medium
+    - .error_handling
+    - .artifacts_short
+
+.base_sync:
+  stage: sync
+  extends:
+    - .timeout_short
+    - .error_handling
+
+.base_cleanup:
+  stage: cleanup
+  extends:
+    - .timeout_short
+    - .error_handling
+
+# =============================================================================
+# UTILITAIRES VALIDATION
+# =============================================================================
+
+.validate_environment:
+  script:
+    - |
+      echo "🔍 Validation de l'environnement $ENV..."
+      if [ -z "$ENV" ]; then
+        echo "❌ Variable ENV non définie"
+        exit 1
+      fi
+      
+      if ! echo "$AVAILABLE_ENVIRONMENTS" | grep -q "$ENV"; then
+        echo "❌ Environnement $ENV non supporté"
+        echo "   Environnements disponibles: $AVAILABLE_ENVIRONMENTS"
+        exit 1
+      fi
+      
+      echo "✅ Environnement $ENV validé"
+
+.validate_branch_prod:
+  script:
+    - |
+      if [ "$ENV" = "prod" ] && [ "$CI_COMMIT_BRANCH" != "$PRODUCTION_BRANCH" ]; then
+        echo "❌ Déploiement production autorisé uniquement depuis $PRODUCTION_BRANCH"
+        echo "   Branche actuelle: $CI_COMMIT_BRANCH"
+        exit 1
+      fi
+      echo "✅ Branche validée pour l'environnement $ENV"

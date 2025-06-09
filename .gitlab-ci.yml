@@ -2,7 +2,7 @@
 # PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE (VERSION MODULAIRE)
 # =============================================================================
 # Description : Pipeline orchestrateur utilisant une architecture modulaire
-# Version     : 3.0.0 - Modularisé et optimisé
+# Version     : 3.1.0 - Refactorisation DRY complète
 # Migration   : Depuis pipeline monolithique v2.0.0
 # Auteur      : Infrastructure Team
 # =============================================================================
@@ -10,9 +10,9 @@
 # 📋 INCLUSION DES MODULES SPÉCIALISÉS
 include:
   - local: '.gitlab/ci/templates/variables.yml'
-  # - local: '.gitlab/ci/templates/globals.yml'
+  - local: '.gitlab/ci/templates/globals.yml'
   - local: '.gitlab/ci/templates/terraform.yml'
-  # - local: '.gitlab/ci/templates/ansible.yml'
+  - local: '.gitlab/ci/templates/ansible.yml'
   # - local: '.gitlab/ci/templates/sync.yml'
   # - local: '.gitlab/ci/templates/cleanup.yml'
 

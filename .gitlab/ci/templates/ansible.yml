@@ -1,0 +1,219 @@
+# =============================================================================
+# TEMPLATES ANSIBLE - GITLAB CI/CD
+# =============================================================================
+# Description : Templates spécialisés pour l'automatisation Ansible
+# Version     : 1.0.0
+# =============================================================================
+
+# =============================================================================
+# TEMPLATE DE BASE ANSIBLE
+# =============================================================================
+
+.ansible_base:
+  image: cytopia/ansible:latest
+  extends:
+    - .base_deploy
+    - .error_handling
+  variables:
+    ANSIBLE_FORCE_COLOR: "True"
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+    ANSIBLE_STDOUT_CALLBACK: "yaml"
+    ANSIBLE_GATHER_FACTS: "True"
+  before_script:
+    - echo "🔧 Préparation environnement Ansible..."
+    - apk add --no-cache jq curl bash
+    - ansible --version
+    - echo "📁 Répertoire de travail: $(pwd)"
+    - echo "📋 Inventaires disponibles:"
+    - ls -la ${ANSIBLE_DIR}/inventory/ 2>/dev/null || echo "   Aucun inventaire trouvé"
+
+# =============================================================================
+# VALIDATION INVENTAIRE ANSIBLE
+# =============================================================================
+
+.ansible_validate_inventory:
+  extends: .ansible_base
+  script:
+    - |
+      echo "🔍 Validation de l'inventaire Ansible pour $ENV..."
+      
+      inventory_file="${ANSIBLE_DIR}/inventory/${ENV}"
+      
+      if [ ! -f "$inventory_file" ]; then
+        echo "❌ Inventaire $ENV non trouvé: $inventory_file"
+        echo "📋 Inventaires disponibles:"
+        ls -la "${ANSIBLE_DIR}/inventory/" 2>/dev/null || echo "   Répertoire inventory vide"
+        exit 1
+      fi
+      
+      echo "✅ Inventaire trouvé: $inventory_file"
+      echo "📄 Contenu de l'inventaire:"
+      echo "----------------------------------------"
+      cat "$inventory_file"
+      echo "----------------------------------------"
+      
+      # Validation syntaxique avec ansible-inventory
+      if command -v ansible-inventory >/dev/null 2>&1; then
+        echo "🔍 Validation syntaxique de l'inventaire..."
+        ansible-inventory -i "$inventory_file" --list >/dev/null
+        if [ $? -eq 0 ]; then
+          echo "✅ Syntaxe de l'inventaire validée"
+        else
+          echo "❌ Erreur de syntaxe dans l'inventaire"
+          exit 1
+        fi
+      else
+        echo "⚠️  ansible-inventory non disponible, validation syntaxique ignorée"
+      fi
+
+# =============================================================================
+# TEST DE CONNECTIVITÉ ANSIBLE
+# =============================================================================
+
+.ansible_connectivity_test:
+  extends: .ansible_base
+  script:
+    - |
+      echo "🌐 Test de connectivité Ansible vers $ENV..."
+      
+      inventory_file="${ANSIBLE_DIR}/inventory/${ENV}"
+      
+      if [ ! -f "$inventory_file" ]; then
+        echo "❌ Inventaire non trouvé pour test de connectivité"
+        exit 1
+      fi
+      
+      # Test ping Ansible
+      echo "🏓 Test ping Ansible..."
+      ansible all -i "$inventory_file" -m ping --timeout=30
+      ping_result=$?
+      
+      if [ $ping_result -eq 0 ]; then
+        echo "✅ Connectivité Ansible réussie"
+      else
+        echo "⚠️  Test ping Ansible échoué (code: $ping_result)"
+        echo "   Cela peut être normal si les serveurs sont inaccessibles"
+        echo "   ou si les clés SSH ne sont pas configurées"
+      fi
+      
+      # Test de collecte des facts (plus informatif)
+      echo "📊 Test de collecte des informations système..."
+      ansible all -i "$inventory_file" -m gather_facts --timeout=30 || echo "⚠️  Collecte des facts échouée"
+
+# =============================================================================
+# EXÉCUTION DE PLAYBOOKS
+# =============================================================================
+
+.ansible_run_playbook:
+  extends: .ansible_base
+  variables:
+    PLAYBOOK_PATH: ""
+    ANSIBLE_EXTRA_VARS: ""
+    CHECK_MODE: "false"
+  script:
+    - |
+      echo "🚀 Exécution du playbook Ansible..."
+      
+      if [ -z "$PLAYBOOK_PATH" ]; then
+        echo "❌ Variable PLAYBOOK_PATH non définie"
+        exit 1
+      fi
+      
+      inventory_file="${ANSIBLE_DIR}/inventory/${ENV}"
+      playbook_file="${ANSIBLE_DIR}/${PLAYBOOK_PATH}"
+      
+      echo "📋 Configuration:"
+      echo "   Inventaire: $inventory_file"
+      echo "   Playbook: $playbook_file"
+      echo "   Environment: $ENV"
+      echo "   Check mode: $CHECK_MODE"
+      
+      if [ ! -f "$playbook_file" ]; then
+        echo "❌ Playbook non trouvé: $playbook_file"
+        echo "📋 Playbooks disponibles:"
+        find "${ANSIBLE_DIR}" -name "*.yml" -type f | head -10
+        exit 1
+      fi
+      
+      # Construction de la commande ansible-playbook
+      cmd="ansible-playbook -i $inventory_file $playbook_file"
+      
+      if [ "$CHECK_MODE" = "true" ]; then
+        cmd="$cmd --check --diff"
+        echo "🔍 Mode check activé (simulation)"
+      fi
+      
+      if [ ! -z "$ANSIBLE_EXTRA_VARS" ]; then
+        cmd="$cmd --extra-vars '$ANSIBLE_EXTRA_VARS'"
+        echo "📝 Variables supplémentaires: $ANSIBLE_EXTRA_VARS"
+      fi
+      
+      echo "▶️  Commande exécutée: $cmd"
+      echo "----------------------------------------"
+      
+      # Exécution du playbook
+      eval $cmd
+      result=$?
+      
+      echo "----------------------------------------"
+      if [ $result -eq 0 ]; then
+        echo "✅ Playbook exécuté avec succès"
+      else
+        echo "❌ Échec du playbook (code: $result)"
+        exit $result
+      fi
+
+# =============================================================================
+# TEMPLATES SPÉCIALISÉS PAR TYPE DE DÉPLOIEMENT
+# =============================================================================
+
+.ansible_deploy_dev:
+  extends: 
+    - .ansible_run_playbook
+    - .rules_manual_dev
+  variables:
+    ENV: dev
+    CHECK_MODE: "true"  # Mode check par défaut en dev
+
+.ansible_deploy_prod:
+  extends: 
+    - .ansible_run_playbook
+    - .rules_manual_prod
+  variables:
+    ENV: prod
+    CHECK_MODE: "false"  # Mode réel en production
+  environment:
+    name: production
+    action: start
+  before_script:
+    - !reference [.ansible_base, before_script]
+    - !reference [.validate_branch_prod, script]
+
+# =============================================================================
+# TEMPLATES DE MAINTENANCE
+# =============================================================================
+
+.ansible_maintenance:
+  extends: .ansible_base
+  stage: cleanup
+  variables:
+    MAINTENANCE_TYPE: ""
+  script:
+    - |
+      echo "🔧 Opération de maintenance Ansible: $MAINTENANCE_TYPE..."
+      
+      case "$MAINTENANCE_TYPE" in
+        "clean_logs")
+          echo "🧹 Nettoyage des logs Ansible..."
+          find "${ANSIBLE_DIR}" -name "*.log" -type f -mtime +7 -delete || true
+          ;;
+        "update_cache")
+          echo "🔄 Mise à jour du cache Ansible..."
+          # Logique de mise à jour du cache si nécessaire
+          ;;
+        *)
+          echo "⚠️  Type de maintenance non reconnu: $MAINTENANCE_TYPE"
+          ;;
+      esac
+      
+      echo "✅ Maintenance Ansible terminée"

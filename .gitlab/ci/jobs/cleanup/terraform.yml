@@ -1,26 +1,10 @@
-# Nettoyage des ressources temporaires (mis à jour)
+# =============================================================================
+# JOBS DE NETTOYAGE TERRAFORM (VERSION REFACTORISÉE)
+# =============================================================================
+
+# Nettoyage des ressources temporaires
 cleanup:
-  stage: cleanup
-  image: alpine:latest
-  timeout: 3m
-  script:
-    - echo "🧹 Nettoyage des ressources temporaires..."
-    - |
-      # Nettoyage des anciens plans
-      find ${TF_ROOT} -name "tfplan" -mtime +7 -delete || true
-      find ${TF_ROOT} -name "*.backup.*" -mtime +30 -delete || true
-      
-      # 🆕 Nettoyage des anciens rapports de validation
-      find . -name "version_validation_report.json" -mtime +7 -delete || true
-      find ${TF_ROOT} -name "version-constraints.json" -mtime +30 -delete || true
-      
-      # Nettoyage des logs
-      find /tmp -name "*.log" -mtime +1 -delete || true
-      
-      echo "✅ Nettoyage terminé (incluant fichiers de versions)"
-  
+  extends: .terraform_cleanup
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
-  # tags:
-  #   - terraform
