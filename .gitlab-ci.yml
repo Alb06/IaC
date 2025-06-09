@@ -2,9 +2,13 @@
 # PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE
 # =============================================================================
 # Description : Pipeline automatisé pour le déploiement IaC
-# Utilise les variables centralisées du module globals
-# Version : 2.0.0 - Gestion centralisée des versions Terraform
+# Version : 2.1.0 - Variables centralisées
 # =============================================================================
+
+# Inclusion des modules de configuration
+include:
+  # Variables globales et configuration du cache
+  - local: '.gitlab/ci/includes/variables.yml'
 
 stages:
   - validate
@@ -13,31 +17,6 @@ stages:
   - deploy
   - sync
   - cleanup
-
-variables:
-  TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
-  # Versions récupérées dynamiquement depuis les outputs Terraform
-  TF_VERSION: "1.12.1"
-  GIT_DEPTH: 0
-  # Configuration Ansible
-  ANSIBLE_HOST_KEY_CHECKING: "False"
-  ANSIBLE_FORCE_COLOR: "True"
-  # Configuration sécurité
-  DOCKER_TLS_CERTDIR: "/certs"
-  # Optimisation pour shared runners
-  DOCKER_DRIVER: overlay2
-  FF_USE_FASTZIP: "true"
-  ARTIFACT_COMPRESSION_LEVEL: "fast"
-  CACHE_COMPRESSION_LEVEL: "fast"
-
-# Cache optimisé pour shared runners
-cache:
-  key: "terraform-${CI_COMMIT_REF_SLUG}-${ENV:-global}"
-  paths:
-    - ${TF_ROOT}/${ENV:-**}/.terraform
-    - ${TF_ROOT}/${ENV:-**}/.terraform.lock.hcl
-  policy: pull-push
-  when: always
 
 # =============================================================================
 # TEMPLATES RÉUTILISABLES

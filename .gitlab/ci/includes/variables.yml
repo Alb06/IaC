@@ -1,0 +1,141 @@
+# =============================================================================
+# VARIABLES GLOBALES ET CONFIGURATION CACHE - PIPELINE GITLAB CI/CD
+# =============================================================================
+# Description : Centralisation de toutes les variables du pipeline IaC
+# Version     : 1.0.0
+# Dernière mise à jour : 2025-06-09
+# =============================================================================
+
+# Configuration globale des variables
+variables:
+  # =============================================================================
+  # CONFIGURATION TERRAFORM
+  # =============================================================================
+  
+  # Racine des configurations Terraform
+  TF_ROOT: ${CI_PROJECT_DIR}/terraform/environments
+  
+  # Version de Terraform à utiliser (doit correspondre à terraform/globals/versions.tf)
+  TF_VERSION: "1.12.1"
+  
+  # =============================================================================
+  # CONFIGURATION GIT
+  # =============================================================================
+  
+  # Profondeur de clone Git (0 = historique complet)
+  GIT_DEPTH: 0
+  
+  # =============================================================================
+  # CONFIGURATION ANSIBLE
+  # =============================================================================
+  
+  # Désactive la vérification des clés SSH pour Ansible
+  ANSIBLE_HOST_KEY_CHECKING: "False"
+  
+  # Force l'affichage en couleur pour Ansible
+  ANSIBLE_FORCE_COLOR: "True"
+  
+  # Version Ansible (pour référence, non utilisée dans l'installation)
+  ANSIBLE_VERSION: "2.18.6"
+  
+  # =============================================================================
+  # CONFIGURATION DOCKER ET SECURITÉ
+  # =============================================================================
+  
+  # Répertoire des certificats TLS Docker
+  DOCKER_TLS_CERTDIR: "/certs"
+  
+  # Driver de stockage Docker optimisé
+  DOCKER_DRIVER: overlay2
+  
+  # =============================================================================
+  # OPTIMISATION PERFORMANCE SHARED RUNNERS
+  # =============================================================================
+  
+  # Utilisation de FastZip pour les artifacts
+  FF_USE_FASTZIP: "true"
+  
+  # Niveau de compression des artifacts (fast/slow/fastest/slowest/default)
+  ARTIFACT_COMPRESSION_LEVEL: "fast"
+  
+  # Niveau de compression du cache
+  CACHE_COMPRESSION_LEVEL: "fast"
+  
+  # =============================================================================
+  # TIMEOUTS ET LIMITES
+  # =============================================================================
+  
+  # Timeout pour les requêtes HTTP (en secondes)
+  REQUEST_TIMEOUT: 30
+  
+  # Nombre maximum de tentatives pour les opérations réseau
+  RETRY_ATTEMPTS: 3
+  
+  # Délai entre les tentatives (en secondes)
+  RETRY_DELAY: 2
+  
+  # =============================================================================
+  # VARIABLES ENVIRONNEMENTS
+  # =============================================================================
+  
+  # Environnements disponibles (pour validation)
+  AVAILABLE_ENVIRONMENTS: "dev prod"
+  
+  # Branche principale pour les déploiements production
+  PRODUCTION_BRANCH: "main"
+  
+  # =============================================================================
+  # PATHS ET RÉPERTOIRES
+  # =============================================================================
+  
+  # Répertoire des scripts CI/CD
+  CI_SCRIPTS_DIR: ${CI_PROJECT_DIR}/.gitlab/scripts
+  
+  # Répertoire des modules CI
+  CI_MODULES_DIR: ${CI_PROJECT_DIR}/.gitlab/ci
+  
+  # Répertoire Ansible
+  ANSIBLE_DIR: ${CI_PROJECT_DIR}/ansible
+
+# =============================================================================
+# CONFIGURATION DU CACHE GLOBAL
+# =============================================================================
+# Note : Cette configuration peut être surchargée par job si nécessaire
+
+cache:
+  # Clé de cache dynamique incluant la branche et l'environnement
+  key: "terraform-${CI_COMMIT_REF_SLUG}-${ENV:-global}"
+  
+  # Chemins à mettre en cache
+  paths:
+    # Cache Terraform par environnement
+    - ${TF_ROOT}/${ENV:-**}/.terraform
+    - ${TF_ROOT}/${ENV:-**}/.terraform.lock.hcl
+    
+    # Cache des binaires téléchargés (ajouté pour optimisation)
+    - /tmp/terraform-cache-${TF_VERSION}
+    
+  # Politique de cache : pull-push pour shared runners
+  policy: pull-push
+  
+  # Toujours utiliser le cache, même en cas d'échec
+  when: always
+  
+  # Désactiver le décompression du cache non modifié (optimisation)
+  untracked: false
+
+# =============================================================================
+# CONFIGURATION PAR DÉFAUT DES ARTIFACTS
+# =============================================================================
+# Note : Peut être surchargée par job
+
+default:
+  artifacts:
+    # Durée de rétention par défaut
+    expire_in: 1 week
+    
+    # Chemins exclus par défaut
+    exclude:
+      - "**/*.log"
+      - "**/node_modules/**"
+      - "**/.terraform/providers/**"
