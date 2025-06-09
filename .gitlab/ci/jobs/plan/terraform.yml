@@ -3,7 +3,7 @@ plan_dev:
   stage: plan
   image: alpine:latest
   timeout: 3m  
-  <<: *install_terraform
+  extends: .install_terraform
   variables:
     ENV: dev
   script:
@@ -102,7 +102,7 @@ plan_prod:
   stage: plan
   image: alpine:latest
   timeout: 3m
-  <<: *install_terraform
+  extends: .install_terraform
   variables:
     ENV: prod
   script:

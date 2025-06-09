@@ -2,7 +2,7 @@
 validate_versions:
   stage: validate
   image: alpine:latest
-  <<: *install_terraform
+  extends: .install_terraform
   script:
     - echo "🔍 Validation des contraintes de versions Terraform..."
     - apk add --no-cache jq git
@@ -194,7 +194,7 @@ validate:
   stage: validate
   image: alpine:latest
   timeout: 3m
-  <<: *install_terraform
+  extends: .install_terraform
   script:
     - echo "🔍 Validation globale du code Terraform..."
     - cd ${TF_ROOT}

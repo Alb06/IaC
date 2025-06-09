@@ -3,7 +3,7 @@ apply_dev:
   stage: apply
   image: alpine:latest
   timeout: 3m  
-  <<: *install_terraform
+  extends: .install_terraform
   variables:
     ENV: dev
   script:
@@ -69,7 +69,7 @@ apply_prod:
   stage: apply
   image: alpine:latest
   timeout: 3m
-  <<: *install_terraform
+  extends: .install_terraform
   variables:
     ENV: prod
   script:
