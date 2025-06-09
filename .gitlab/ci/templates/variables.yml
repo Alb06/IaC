@@ -2,8 +2,8 @@
 # VARIABLES GLOBALES ET CONFIGURATION CACHE - PIPELINE GITLAB CI/CD
 # =============================================================================
 # Description : Centralisation de toutes les variables du pipeline IaC
-# Version     : 1.0.0
-# Dernière mise à jour : 2025-06-09
+# Version     : 1.1.0 - Ajout variables pour templates DRY
+# Dernière mise à jour : 2025-06-10
 # =============================================================================
 
 # Configuration globale des variables
@@ -85,6 +85,27 @@ variables:
   PRODUCTION_BRANCH: "main"
   
   # =============================================================================
+  # 🆕 VARIABLES POUR TEMPLATES DRY
+  # =============================================================================
+  
+  # Timeouts standards par type de job (utilisés par .timeout_*)
+  TIMEOUT_SHORT: "3m"
+  TIMEOUT_MEDIUM: "5m"
+  TIMEOUT_LONG: "10m"
+  
+  # Configuration des artifacts par défaut
+  ARTIFACTS_EXPIRE_SHORT: "1 day"
+  ARTIFACTS_EXPIRE_STANDARD: "1 week"
+  ARTIFACTS_EXPIRE_LONG: "7 days"
+  
+  # Patterns d'exclusion pour artifacts
+  ARTIFACTS_EXCLUDE_PATTERNS: "**/*.log **/node_modules/** **/.terraform/providers/** **/terraform.tfstate.backup.*"
+  
+  # Configuration des retry par défaut
+  DEFAULT_RETRY_ATTEMPTS: 3
+  DEFAULT_RETRY_DELAY: 2
+  
+  # =============================================================================
   # PATHS ET RÉPERTOIRES
   # =============================================================================
   
@@ -100,7 +121,6 @@ variables:
 # =============================================================================
 # CONFIGURATION DU CACHE GLOBAL
 # =============================================================================
-# Note : Cette configuration peut être surchargée par job si nécessaire
 
 cache:
   # Clé de cache dynamique incluant la branche et l'environnement
@@ -112,7 +132,7 @@ cache:
     - ${TF_ROOT}/${ENV:-**}/.terraform
     - ${TF_ROOT}/${ENV:-**}/.terraform.lock.hcl
     
-    # Cache des binaires téléchargés (ajouté pour optimisation)
+    # Cache des binaires téléchargés
     - /tmp/terraform-cache-${TF_VERSION}
     
   # Politique de cache : pull-push pour shared runners
@@ -121,21 +141,21 @@ cache:
   # Toujours utiliser le cache, même en cas d'échec
   when: always
   
-  # Désactiver le décompression du cache non modifié (optimisation)
+  # Désactiver le décompression du cache non modifié
   untracked: false
 
 # =============================================================================
-# CONFIGURATION PAR DÉFAUT DES ARTIFACTS
+# CONFIGURATION PAR DÉFAUT DES ARTIFACTS (REFACTORISÉE)
 # =============================================================================
-# Note : Peut être surchargée par job
 
 default:
   artifacts:
     # Durée de rétention par défaut
     expire_in: 1 week
     
-    # Chemins exclus par défaut
+    # Chemins exclus par défaut (convertis depuis la variable)
     exclude:
       - "**/*.log"
       - "**/node_modules/**"
       - "**/.terraform/providers/**"
+      - "**/terraform.tfstate.backup.*"

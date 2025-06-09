@@ -1,8 +1,18 @@
-# 🆕 VALIDATION SPÉCIFIQUE DES VERSIONS TERRAFORM (VERSION AMÉLIORÉE)
+# =============================================================================
+# JOBS DE VALIDATION TERRAFORM (VERSION REFACTORISÉE)
+# =============================================================================
+# Description : Jobs de validation utilisant les templates DRY
+# Version : 2.0.0 - Refactorisation complète
+# =============================================================================
+
+# =============================================================================
+# VALIDATION SPÉCIFIQUE DES VERSIONS TERRAFORM
+# =============================================================================
+
 validate_versions:
-  stage: validate
-  image: alpine:latest
-  extends: .install_terraform
+  extends: .terraform_validate
+  variables:
+    ENV: "global"  # Validation transverse
   script:
     - echo "🔍 Validation des contraintes de versions Terraform..."
     - apk add --no-cache jq git
@@ -22,7 +32,7 @@ validate_versions:
         fi
       done
     
-    # AUTO-CORRECTION : Formatage automatique des fichiers versions.tf
+    # Auto-formatage des fichiers versions.tf
     - |
       echo "🔧 Auto-formatage des fichiers versions.tf..."
       versions_files=$(find terraform/ -name "versions.tf")
@@ -37,31 +47,27 @@ validate_versions:
         # Application du formatage Terraform
         terraform fmt "$versions_file"
         
-        # Vérification si des changements ont été appliqués
+        # Vérification des changements
         if ! diff -q "$versions_file" "${versions_file}.backup" > /dev/null 2>&1; then
           echo "📝 Formatage appliqué à: $versions_file"
           format_changes=true
           
-          # Affichage des changements pour information
           echo "Changements appliqués:"
           diff "${versions_file}.backup" "$versions_file" || true
         else
           echo "✅ Fichier déjà correctement formaté: $versions_file"
         fi
         
-        # Nettoyage de la sauvegarde
         rm "${versions_file}.backup"
       done
       
-      # Information sur les changements de formatage
       if [ "$format_changes" = true ]; then
         echo "ℹ️  Des changements de formatage ont été appliqués automatiquement"
-        echo "   Ces changements seront inclus dans les artefacts"
       else
         echo "✅ Tous les fichiers versions.tf sont correctement formatés"
       fi
     
-    # Validation syntaxique du module globals avec contraintes
+    # Validation syntaxique du module globals
     - |
       echo "📋 Validation syntaxique du module globals..."
       cd terraform/globals
@@ -75,11 +81,10 @@ validate_versions:
       fi
       cd ../../
     
-    # Validation de la cohérence des contraintes entre environnements
+    # Vérification de la cohérence des contraintes
     - |
       echo "📋 Vérification de la cohérence des contraintes entre environnements..."
       
-      # Extraction des versions Terraform des environnements avec gestion d'erreur
       extract_tf_version() {
         local file=$1
         grep -A 5 "terraform {" "$file" | grep "required_version" | sed 's/.*= *"//; s/".*//' | head -1
@@ -93,7 +98,6 @@ validate_versions:
       echo "Prod Terraform version: '$prod_tf_version'"
       echo "Globals Terraform version: '$globals_tf_version'"
       
-      # Validation de la cohérence
       if [ "$dev_tf_version" != "$prod_tf_version" ] || [ "$dev_tf_version" != "$globals_tf_version" ]; then
         echo "❌ ERREUR: Contraintes Terraform incohérentes"
         echo "   Dev:     '$dev_tf_version'"
@@ -102,18 +106,16 @@ validate_versions:
         exit 1
       fi
       
-      # Validation que les contraintes respectent la version minimale
       if echo "$dev_tf_version" | grep -q "1.12.1"; then
         echo "✅ Contraintes respectent la version minimale 1.12.1"
       else
         echo "❌ Contraintes ne respectent pas la version minimale 1.12.1"
-        echo "   Version détectée: '$dev_tf_version'"
         exit 1
       fi
       
       echo "✅ Contraintes cohérentes entre tous les environnements"
     
-    # Test d'application des contraintes sur les environnements
+    # Test d'application des contraintes
     - |
       echo "📋 Test d'application des contraintes sur les environnements..."
       
@@ -121,7 +123,6 @@ validate_versions:
         echo "🧪 Test environnement: $env"
         cd "terraform/environments/$env"
         
-        # Init et validation avec les nouvelles contraintes
         terraform init -backend=false
         terraform validate
         
@@ -135,7 +136,7 @@ validate_versions:
         cd ../../../
       done
     
-    # Génération d'un rapport de validation amélioré
+    # Génération du rapport de validation
     - |
       echo "📊 Génération du rapport de validation des versions..."
       cat > version_validation_report.json << EOF
@@ -167,7 +168,7 @@ validate_versions:
       echo "📄 Rapport de validation généré:"
       cat version_validation_report.json | jq '.'
     
-    # Sauvegarde des fichiers formatés dans les artefacts
+    # Sauvegarde des fichiers formatés
     - |
       echo "💾 Préparation des artefacts..."
       mkdir -p formatted_files
@@ -181,30 +182,25 @@ validate_versions:
     paths:
       - version_validation_report.json
       - formatted_files/
-    expire_in: 1 week
-  
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-  # tags:
-  #   - terraform
 
-# Validation globale du code Terraform (mise à jour)
+# =============================================================================
+# VALIDATION GLOBALE DU CODE TERRAFORM
+# =============================================================================
+
 validate:
-  stage: validate
-  image: alpine:latest
-  timeout: 3m
-  extends: .install_terraform
+  extends: .terraform_validate
+  variables:
+    ENV: "all"
   script:
     - echo "🔍 Validation globale du code Terraform..."
     - cd ${TF_ROOT}
     
-    # Validation du module globals (versions.tf + main.tf)
+    # Validation du module globals
     - echo "📋 Validation complète du module globals..."
     - cd ../globals && terraform init -backend=false && terraform validate
     - cd ../environments
     
-    # Validation de tous les environnements avec leurs versions.tf
+    # Validation de tous les environnements
     - |
       for env in dev prod; do
         echo "📋 Validation environnement: $env"
@@ -214,7 +210,6 @@ validate:
         fi
         cd "$env"
         
-        # Vérification de la présence de versions.tf
         if [ ! -f "versions.tf" ]; then
           echo "❌ Fichier versions.tf manquant dans $env"
           exit 1
@@ -234,9 +229,3 @@ validate:
   
   dependencies:
     - validate_versions
-  
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-  # tags:
-  #   - terraform

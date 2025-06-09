@@ -1,43 +1,30 @@
-.setup_ssh: &setup_ssh
-  - echo "🔐 Configuration SSH..."
-  - apk add --no-cache git openssh
-  - mkdir -p ~/.ssh
-  - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-  - chmod 600 ~/.ssh/id_ed25519
-  - ssh-keyscan github.com >> ~/.ssh/known_hosts
+# =============================================================================
+# JOBS DE SYNCHRONISATION GITHUB (VERSION REFACTORISÉE)
+# =============================================================================
 
 # Synchronisation vers GitHub
 mirror_to_github:
-  stage: sync
+  extends: 
+    - .setup_ssh
+    - .base_sync
+    - .rules_sync
   image: alpine:latest
-  timeout: 3m
-  before_script:
-    - *setup_ssh
   script:
     - echo "🔄 Synchronisation vers GitHub..."
     - git remote add mirror git@github.com:Alb06/IaC.git || true
     - git push mirror HEAD:main --force
     - echo "✅ Synchronisation terminée"
   needs: []
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: always
-  # tags:
-  #   - terraform
 
 # Synchronisation des issues
 sync_issues_to_github:
-  stage: sync
+  extends: 
+    - .base_sync
+    - .rules_sync
   image: python:3.11
-  timeout: 3m
   before_script:
     - pip install requests
   script:
     - echo "🔄 Synchronisation des issues GitLab → GitHub..."
     - python scripts/ci-cd/sync_issues.py
   needs: []
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: always
-  # tags:
-  #   - terraform
