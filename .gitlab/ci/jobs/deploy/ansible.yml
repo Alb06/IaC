@@ -1,0 +1,47 @@
+# Déploiement Ansible dev
+ansible_dev:
+  stage: deploy
+  image: cytopia/ansible:latest
+  variables:
+    ENV: dev
+  before_script:
+    - echo "🔧 Préparation Ansible pour $ENV..."
+    - apk add --no-cache jq
+  script:
+    - cd ${CI_PROJECT_DIR}/ansible
+    
+    # Vérification de l'inventaire généré
+    - |
+      inventory_file="inventory/${ENV}"
+      if [ ! -f "$inventory_file" ]; then
+        echo "❌ Inventaire $inventory_file non trouvé"
+        echo "Contenu du dossier inventory:"
+        ls -la inventory/
+        exit 1
+      fi
+      
+      echo "✅ Inventaire trouvé: $inventory_file"
+      echo "Contenu de l'inventaire:"
+      cat "$inventory_file"
+    
+    # Test de connectivité Ansible
+    - echo "🔍 Test de connectivité Ansible..."
+    - ansible all -i "inventory/${ENV}" -m ping || echo "⚠️  Test ping échoué"
+    
+    # Exécution du playbook (si existe)
+    - |
+      if [ -f "playbooks/setup.yml" ]; then
+        echo "🚀 Exécution du playbook setup..."
+        ansible-playbook -i "inventory/${ENV}" playbooks/setup.yml --check --diff
+      else
+        echo "ℹ️  Aucun playbook setup.yml trouvé"
+      fi
+  
+  dependencies:
+    - apply_dev
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  tags:
+    - ansible

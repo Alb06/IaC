@@ -1,0 +1,49 @@
+# Version runner self-hosted
+# .install_terraform: &install_terraform
+#   before_script:
+#     - echo "🔧 Installation de Terraform v${TF_VERSION}..."
+#     - apk add --no-cache curl unzip bash git openssh
+#     - mkdir -p /tmp/terraform-cache
+#     - |
+#       if [ ! -f "/tmp/terraform-cache/terraform_${TF_VERSION}" ]; then
+#         echo "📥 Téléchargement de Terraform..."
+#         curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+#         unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d /tmp/terraform-cache/
+#         mv /tmp/terraform-cache/terraform "/tmp/terraform-cache/terraform_${TF_VERSION}"
+#       fi
+#     - cp "/tmp/terraform-cache/terraform_${TF_VERSION}" /usr/local/bin/terraform
+#     - chmod +x /usr/local/bin/terraform
+#     - terraform --version
+#     - echo "✅ Terraform installé avec succès"
+
+# Version runner shared
+.install_terraform: &install_terraform
+  before_script:
+    - echo "🔍 Diagnostic cache Terraform..."
+    - |
+      echo "Contenu du répertoire de travail:"
+      find . -name ".terraform*" -type f -o -name ".terraform" -type d | head -10
+      
+      echo "Variables d'environnement pertinentes:"
+      echo "TF_ROOT: ${TF_ROOT}"
+      echo "CI_PROJECT_DIR: ${CI_PROJECT_DIR}"
+      echo "PWD: $(pwd)"
+      
+    - echo "🔧 Installation de Terraform v${TF_VERSION}..."
+    - apk add --no-cache curl unzip bash git openssh ca-certificates
+    
+    # Cache plus agressif pour shared runners
+    - export TF_CACHE_DIR="/tmp/terraform-cache-${TF_VERSION}"
+    - mkdir -p "$TF_CACHE_DIR"
+    
+    - |
+      if [ ! -f "$TF_CACHE_DIR/terraform" ]; then
+        echo "📥 Téléchargement de Terraform..."
+        curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+        unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d "$TF_CACHE_DIR/"
+        chmod +x "$TF_CACHE_DIR/terraform"
+      fi
+    
+    - cp "$TF_CACHE_DIR/terraform" /usr/local/bin/terraform
+    - terraform --version
+    - echo "✅ Terraform installé avec succès sur shared runner"
