@@ -151,7 +151,7 @@ cache:
 default:
   artifacts:
     # Durée de rétention par défaut
-    expire_in: ${ARTIFACTS_EXPIRE_STANDARD}
+    expire_in: 1 week
     
     # Chemins exclus par défaut (convertis depuis la variable)
     exclude:
