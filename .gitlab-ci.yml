@@ -9,12 +9,12 @@
 
 # 📋 INCLUSION DES MODULES SPÉCIALISÉS
 include:
-  - local: '.gitlab/ci/includes/variables.yml'
-  # - local: '.gitlab/ci/includes/templates.yml'
-  - local: '.gitlab/ci/includes/terraform.yml'
-  # - local: '.gitlab/ci/includes/ansible.yml'
-  # - local: '.gitlab/ci/includes/sync.yml'
-  # - local: '.gitlab/ci/includes/cleanup.yml'
+  - local: '.gitlab/ci/templates/variables.yml'
+  # - local: '.gitlab/ci/templates/globals.yml'
+  - local: '.gitlab/ci/templates/terraform.yml'
+  # - local: '.gitlab/ci/templates/ansible.yml'
+  # - local: '.gitlab/ci/templates/sync.yml'
+  # - local: '.gitlab/ci/templates/cleanup.yml'
 
   - local: '.gitlab/ci/jobs/apply/terraform.yml'
   - local: '.gitlab/ci/jobs/cleanup/terraform.yml'
