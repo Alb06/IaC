@@ -1,0 +1,10 @@
+# =============================================================================
+# JOBS TERRAFORM GITLAB CI/CD
+# =============================================================================
+# Description : Jobs spécifiques pour les opérations Terraform
+# Version     : 1.0.0
+# Note        : Ce fichier sera complété dans la tâche [305]
+# =============================================================================
+
+# Placeholder - Ce fichier sera rempli lors de la migration des jobs Terraform
+# Voir tâche [305] - Modulariser les jobs Terraform dans un fichier dédié
