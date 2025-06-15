@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# COMMON.SH - Fonctions Utilitaires Partagées CI/CD
+# COMMON.SH - Fonctions Utilitaires Partagées CI/CD (AMÉLIORÉ)
 # =============================================================================
 # Description : Bibliothèque de fonctions communes pour tous les scripts
 # Usage       : source .gitlab/scripts/utils/common.sh
 # Auteur      : Infrastructure Team
-# Version     : 1.0.0
+# Version     : 1.0.1 - Amélioration gestion des chemins
 # =============================================================================
 
 set -euo pipefail
@@ -27,6 +27,57 @@ readonly NC='\033[0m' # No Color
 readonly DEFAULT_TIMEOUT=${REQUEST_TIMEOUT:-30}
 readonly DEFAULT_RETRY_ATTEMPTS=${RETRY_ATTEMPTS:-3}
 readonly DEFAULT_RETRY_DELAY=${RETRY_DELAY:-2}
+
+# Détection du répertoire racine du projet
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
+# =============================================================================
+# FONCTIONS DE NAVIGATION PROJET
+# =============================================================================
+
+find_project_root() {
+    local current_dir="${SCRIPT_DIR:-$(pwd)}"
+    
+    # Validation de départ
+    if [[ -z "$current_dir" ]]; then
+        log_error "SCRIPT_DIR non défini"
+        return 1
+    fi
+    
+    log_debug "Recherche de la racine depuis: $current_dir"
+    
+    while [[ "$current_dir" != "/" ]]; do
+        if [[ -f "$current_dir/.gitlab-ci.yml" ]] && [[ -d "$current_dir/terraform" ]]; then
+            echo "$current_dir"
+            return 0  # ✅ Succès explicite
+        fi
+        current_dir="$(dirname "$current_dir")"
+    done
+    
+    # ❌ Échec explicite (sans exit pour permettre la gestion par l'appelant)
+    log_error "Racine du projet IaC non trouvée"
+    return 1
+}
+
+# Fonction utilitaire pour initialiser PROJECT_ROOT
+init_project_root() {
+    PROJECT_ROOT="$(find_project_root)" || {
+        log_error "Impossible de déterminer PROJECT_ROOT"
+        log_error "Vérifiez la structure du projet IaC"
+        exit 1
+    }
+
+    if [[ -z "$PROJECT_ROOT" ]]; then
+        log_error "PROJECT_ROOT est vide"
+        exit 1
+    fi
+
+    readonly PROJECT_ROOT
+    log_debug "PROJECT_ROOT validé: $PROJECT_ROOT"
+}
+
+init_project_root
 
 # =============================================================================
 # FONCTIONS DE LOGGING
@@ -78,24 +129,58 @@ validate_required_var() {
 validate_file_exists() {
     local file_path="$1"
     
-    if [[ ! -f "$file_path" ]]; then
+    # Gestion des chemins relatifs et absolus
+    local full_path
+    if [[ "$file_path" = /* ]]; then
+        full_path="$file_path"
+    else
+        full_path="$PROJECT_ROOT/$file_path"
+    fi
+    
+    if [[ ! -f "$full_path" ]]; then
         log_error "Fichier non trouvé: $file_path"
+        log_debug "Chemin complet testé: $full_path"
+        log_debug "Répertoire courant: $(pwd)"
+        log_debug "Contenu du répertoire parent:"
+        ls -la "$(dirname "$full_path")" 2>/dev/null || log_debug "Répertoire parent inaccessible"
         return 1
     fi
     
-    log_debug "Fichier validé: $file_path"
+    log_debug "Fichier validé: $file_path ($full_path)"
     return 0
 }
 
 validate_directory_exists() {
     local dir_path="$1"
     
-    if [[ ! -d "$dir_path" ]]; then
+    # Gestion des chemins relatifs et absolus
+    local full_path
+    if [[ "$dir_path" = /* ]]; then
+        full_path="$dir_path"
+    else
+        full_path="$PROJECT_ROOT/$dir_path"
+    fi
+    
+    if [[ ! -d "$full_path" ]]; then
         log_error "Répertoire non trouvé: $dir_path"
+        log_debug "Chemin complet testé: $full_path"
+        log_debug "Répertoire courant: $(pwd)"
+        log_debug "Répertoire racine projet: $PROJECT_ROOT"
+        
+        # Diagnostic supplémentaire
+        local parent_dir
+        parent_dir="$(dirname "$full_path")"
+        if [[ -d "$parent_dir" ]]; then
+            log_debug "Contenu du répertoire parent ($parent_dir):"
+            ls -la "$parent_dir" 2>/dev/null || log_debug "Impossible de lister le contenu"
+        else
+            log_debug "Répertoire parent inexistant: $parent_dir"
+        fi
+        
         return 1
     fi
     
-    log_debug "Répertoire validé: $dir_path"
+    log_debug "Répertoire validé: $dir_path ($full_path)"
     return 0
 }
 
@@ -185,6 +270,15 @@ cleanup_on_exit() {
     if [[ $exit_code -ne 0 ]]; then
         log_error "Script terminé avec le code d'erreur: $exit_code"
         
+        # Diagnostic supplémentaire
+        log_debug "=== DIAGNOSTIC ==="
+        log_debug "Répertoire courant: $(pwd)"
+        log_debug "Répertoire racine projet: $PROJECT_ROOT"
+        log_debug "Variables d'environnement importantes:"
+        log_debug "  TF_ROOT: ${TF_ROOT:-non défini}"
+        log_debug "  CI_PROJECT_DIR: ${CI_PROJECT_DIR:-non défini}"
+        log_debug "  ENV: ${ENV:-non défini}"
+        
         # Sauvegarde des logs d'erreur
         if [[ "${SAVE_ERROR_LOGS:-true}" == "true" ]]; then
             local error_dir="/tmp/error_logs_$(date +%Y%m%d_%H%M%S)"
@@ -243,7 +337,7 @@ validate_terraform_version() {
     fi
     
     local current_version
-    current_version=$(terraform version -json | jq -r '.terraform_version' 2>/dev/null || terraform version | head -1 | awk '{print $2}' | sed 's/v//')
+    current_version=$(terraform version -json 2>/dev/null | jq -r '.terraform_version' 2>/dev/null || terraform version | head -1 | awk '{print $2}' | sed 's/v//')
     
     log_info "Version Terraform détectée: $current_version"
     log_info "Version requise: $required_version"
@@ -259,8 +353,10 @@ validate_terraform_version() {
 }
 
 # =============================================================================
-# EXPORT DES FONCTIONS
+# EXPORT DES FONCTIONS ET INITIALISATION
 # =============================================================================
 
-# Les fonctions sont automatiquement disponibles après source du fichier
+# Information de débogage
 log_debug "Bibliothèque common.sh chargée"
+log_debug "Répertoire racine projet: $PROJECT_ROOT"
+log_debug "Répertoire du script: $SCRIPT_DIR"

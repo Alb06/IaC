@@ -1,0 +1,17 @@
+# .gitattributes
+# Force les scripts shell à utiliser LF uniquement
+*.sh text eol=lf
+
+# Pour être plus spécifique aux scripts dans .gitlab/
+.gitlab/scripts/**/*.sh text eol=lf
+
+# Configuration globale pour d'autres types de fichiers
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Fichiers binaires (pas de conversion)
+*.png binary
+*.jpg binary
+*.exe binary

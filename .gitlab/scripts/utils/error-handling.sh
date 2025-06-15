@@ -18,7 +18,8 @@ source "$SCRIPT_DIR/common.sh"
 
 readonly ERROR_REPORTING="${ERROR_REPORTING:-true}"
 readonly JOB_STATUS="${CI_JOB_STATUS:-unknown}"
-readonly ERROR_LOGS_DIR="/tmp/error_logs_$(date +%Y%m%d_%H%M%S)"
+ERROR_LOGS_DIR="/tmp/error_logs_$(date +%Y%m%d_%H%M%S)"
+readonly ERROR_LOGS_DIR
 
 # =============================================================================
 # FONCTIONS DE GESTION D'ERREURS

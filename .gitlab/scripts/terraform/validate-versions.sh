@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# VALIDATE-VERSIONS.SH - Validation Contraintes Versions Terraform
+# VALIDATE-VERSIONS.SH - Validation Contraintes Versions Terraform (CORRIGÉ)
 # =============================================================================
 # Description : Validation des contraintes de versions avec auto-formatage
 # Usage       : ./validate-versions.sh
 # Auteur      : Infrastructure Team
-# Version     : 1.0.0
+# Version     : 1.0.1 - Correction formatage JSON
 # =============================================================================
 
 # Chargement des fonctions communes
@@ -24,6 +24,7 @@ readonly REQUIRED_FILES=(
 
 readonly ARTIFACTS_DIR="formatted_files"
 readonly REPORT_FILE="version_validation_report.json"
+init_project_root
 
 # =============================================================================
 # FONCTIONS DE VALIDATION
@@ -35,7 +36,8 @@ check_required_files() {
     local missing_files=()
     
     for file in "${REQUIRED_FILES[@]}"; do
-        if [[ -f "$file" ]]; then
+        local full_path="$PROJECT_ROOT/$file"
+        if [[ -f "$full_path" ]]; then
             log_success "Fichier trouvé: $file"
         else
             log_error "Fichier manquant: $file"
@@ -57,10 +59,10 @@ auto_format_versions_files() {
     local format_changes=false
     local versions_files
     
-    mapfile -t versions_files < <(find terraform/ -name "versions.tf" -type f)
+    mapfile -t versions_files < <(find "$PROJECT_ROOT/terraform/" -name "versions.tf" -type f)
     
     for versions_file in "${versions_files[@]}"; do
-        log_step "Formatage automatique: $versions_file"
+        log_step "Formatage automatique: $(basename "$(dirname "$versions_file")")/$(basename "$versions_file")"
         
         # Sauvegarde avant formatage
         cp "$versions_file" "${versions_file}.backup"
@@ -85,18 +87,17 @@ auto_format_versions_files() {
     
     if [[ "$format_changes" == "true" ]]; then
         log_info "ℹ️  Des changements de formatage ont été appliqués automatiquement"
+        echo "true"
     else
         log_success "Tous les fichiers versions.tf sont correctement formatés"
+        echo "false"
     fi
-    
-    # Export pour utilisation dans le rapport
-    echo "$format_changes"
 }
 
 validate_globals_module() {
     print_header "Validation Syntaxique du Module Globals"
     
-    local globals_dir="terraform/globals"
+    local globals_dir="$PROJECT_ROOT/terraform/globals"
     
     validate_directory_exists "$globals_dir"
     
@@ -111,7 +112,7 @@ validate_globals_module() {
     log_step "Validation syntaxique..."
     terraform validate
     
-    cd - >/dev/null || return 1
+    cd "$PROJECT_ROOT" || return 1
     
     log_success "Module globals validé syntaxiquement"
 }
@@ -130,9 +131,9 @@ validate_version_consistency() {
     
     local dev_version prod_version globals_version
     
-    dev_version=$(extract_terraform_version "terraform/environments/dev/versions.tf")
-    prod_version=$(extract_terraform_version "terraform/environments/prod/versions.tf")
-    globals_version=$(extract_terraform_version "terraform/globals/versions.tf")
+    dev_version=$(extract_terraform_version "$PROJECT_ROOT/terraform/environments/dev/versions.tf")
+    prod_version=$(extract_terraform_version "$PROJECT_ROOT/terraform/environments/prod/versions.tf")
+    globals_version=$(extract_terraform_version "$PROJECT_ROOT/terraform/globals/versions.tf")
     
     log_info "Versions détectées:"
     log_info "  Dev:     '$dev_version'"
@@ -168,7 +169,7 @@ test_environment_constraints() {
     for env in "${environments[@]}"; do
         log_step "🧪 Test environnement: $env"
         
-        local env_dir="terraform/environments/$env"
+        local env_dir="$PROJECT_ROOT/terraform/environments/$env"
         validate_directory_exists "$env_dir"
         
         cd "$env_dir" || {
@@ -180,24 +181,32 @@ test_environment_constraints() {
         terraform init -backend=false
         terraform validate
         
-        cd - >/dev/null || return 1
+        cd "$PROJECT_ROOT" || return 1
         
         log_success "Environnement $env compatible avec les contraintes"
     done
 }
 
 generate_validation_report() {
-    local format_changes="$1"
+    local format_changes_raw="$1"
     local terraform_version="$2"
     
     print_header "Génération du Rapport de Validation"
+    
+    # Conversion en booléen JSON valide
+    local format_changes_json
+    if [[ "$format_changes_raw" == "true" ]]; then
+        format_changes_json="true"
+    else
+        format_changes_json="false"
+    fi
     
     cat > "$REPORT_FILE" << EOF
 {
   "validation_date": "$(date -Iseconds)",
   "terraform_version_used": "${TF_VERSION:-unknown}",
   "validation_status": "SUCCESS",
-  "auto_formatting_applied": $format_changes,
+  "auto_formatting_applied": $format_changes_json,
   "files_validated": [
     "terraform/globals/versions.tf",
     "terraform/environments/dev/versions.tf",
@@ -218,9 +227,17 @@ generate_validation_report() {
 }
 EOF
     
+    # Validation JSON avant affichage
     if command -v jq >/dev/null 2>&1; then
-        log_info "📄 Rapport de validation généré:"
-        jq '.' "$REPORT_FILE"
+        if jq '.' "$REPORT_FILE" > /dev/null 2>&1; then
+            log_info "📄 Rapport de validation généré:"
+            jq '.' "$REPORT_FILE"
+        else
+            log_error "Erreur dans le format JSON du rapport"
+            log_info "Contenu brut du rapport:"
+            cat "$REPORT_FILE"
+            return 1
+        fi
     else
         log_info "📄 Rapport généré: $REPORT_FILE"
         cat "$REPORT_FILE"
@@ -233,9 +250,9 @@ prepare_artifacts() {
     mkdir -p "$ARTIFACTS_DIR"
     
     local files=(
-        "terraform/globals/versions.tf:globals_versions.tf"
-        "terraform/environments/dev/versions.tf:dev_versions.tf"
-        "terraform/environments/prod/versions.tf:prod_versions.tf"
+        "$PROJECT_ROOT/terraform/globals/versions.tf:globals_versions.tf"
+        "$PROJECT_ROOT/terraform/environments/dev/versions.tf:dev_versions.tf"
+        "$PROJECT_ROOT/terraform/environments/prod/versions.tf:prod_versions.tf"
     )
     
     for file_mapping in "${files[@]}"; do
@@ -258,9 +275,17 @@ prepare_artifacts() {
 main() {
     print_header "Validation des Contraintes de Versions Terraform"
     
+    log_info "Répertoire de travail: $PROJECT_ROOT"
+    
     # Installation des dépendances
     install_package "jq"
     install_package "git"
+    
+    # Changement vers le répertoire du projet
+    cd "$PROJECT_ROOT" || {
+        log_error "Impossible d'accéder au répertoire du projet: $PROJECT_ROOT"
+        return 1
+    }
     
     # Validation étape par étape
     check_required_files
