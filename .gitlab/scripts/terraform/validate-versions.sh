@@ -127,7 +127,7 @@ extract_terraform_version() {
 }
 
 validate_version_consistency() {
-    print_header "Vérification de la Cohérence des Contraintes"
+    #print_header "Vérification de la Cohérence des Contraintes"
     
     local dev_version prod_version globals_version
     
