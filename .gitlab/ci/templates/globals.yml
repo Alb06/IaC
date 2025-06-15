@@ -11,6 +11,7 @@
 
 .setup_ssh:
   before_script:
+    - apk add --no-cache bash
     - chmod +x .gitlab/scripts/utils/ssh-setup.sh
     - .gitlab/scripts/utils/ssh-setup.sh github
 
