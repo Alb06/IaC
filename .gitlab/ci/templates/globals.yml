@@ -79,7 +79,6 @@
   variables:
     ERROR_REPORTING: "true"
   after_script:
-    - apk add --no-cache bash
     - chmod +x .gitlab/scripts/utils/error-handling.sh
     - .gitlab/scripts/utils/error-handling.sh
 
