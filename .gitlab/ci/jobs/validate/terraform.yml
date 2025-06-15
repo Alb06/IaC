@@ -1,8 +1,8 @@
 # =============================================================================
 # JOBS DE VALIDATION TERRAFORM (VERSION REFACTORISÉE)
 # =============================================================================
-# Description : Jobs de validation utilisant les templates DRY
-# Version : 2.0.0 - Refactorisation complète
+# Description : Jobs de validation utilisant des scripts externes
+# Version : 3.0.0 - Scripts externalisés
 # =============================================================================
 
 # =============================================================================
@@ -14,170 +14,8 @@ validate_versions:
   variables:
     ENV: "global"  # Validation transverse
   script:
-    - echo "🔍 Validation des contraintes de versions Terraform..."
-    - apk add --no-cache jq git
-    
-    # Vérification de l'existence des fichiers versions.tf
-    - |
-      echo "📋 Vérification de la présence des fichiers versions.tf..."
-      
-      required_files="terraform/globals/versions.tf terraform/environments/dev/versions.tf terraform/environments/prod/versions.tf"
-      
-      for file in $required_files; do
-        if [ ! -f "$file" ]; then
-          echo "❌ Fichier manquant: $file"
-          exit 1
-        else
-          echo "✅ Fichier trouvé: $file"
-        fi
-      done
-    
-    # Auto-formatage des fichiers versions.tf
-    - |
-      echo "🔧 Auto-formatage des fichiers versions.tf..."
-      versions_files=$(find terraform/ -name "versions.tf")
-      format_changes=false
-
-      for versions_file in $versions_files; do
-        echo "🔧 Formatage automatique: $versions_file"
-        
-        # Sauvegarde avant formatage
-        cp "$versions_file" "${versions_file}.backup"
-        
-        # Application du formatage Terraform
-        terraform fmt "$versions_file"
-        
-        # Vérification des changements
-        if ! diff -q "$versions_file" "${versions_file}.backup" > /dev/null 2>&1; then
-          echo "📝 Formatage appliqué à: $versions_file"
-          format_changes=true
-          
-          echo "Changements appliqués:"
-          diff "${versions_file}.backup" "$versions_file" || true
-        else
-          echo "✅ Fichier déjà correctement formaté: $versions_file"
-        fi
-        
-        rm "${versions_file}.backup"
-      done
-      
-      if [ "$format_changes" = true ]; then
-        echo "ℹ️  Des changements de formatage ont été appliqués automatiquement"
-      else
-        echo "✅ Tous les fichiers versions.tf sont correctement formatés"
-      fi
-    
-    # Validation syntaxique du module globals
-    - |
-      echo "📋 Validation syntaxique du module globals..."
-      cd terraform/globals
-      terraform init -backend=false
-      terraform validate
-      if [ $? -eq 0 ]; then
-        echo "✅ Module globals validé syntaxiquement"
-      else
-        echo "❌ Erreur de syntaxe dans le module globals"
-        exit 1
-      fi
-      cd ../../
-    
-    # Vérification de la cohérence des contraintes
-    - |
-      echo "📋 Vérification de la cohérence des contraintes entre environnements..."
-      
-      extract_tf_version() {
-        local file=$1
-        grep -A 5 "terraform {" "$file" | grep "required_version" | sed 's/.*= *"//; s/".*//' | head -1
-      }
-      
-      dev_tf_version=$(extract_tf_version "terraform/environments/dev/versions.tf")
-      prod_tf_version=$(extract_tf_version "terraform/environments/prod/versions.tf")
-      globals_tf_version=$(extract_tf_version "terraform/globals/versions.tf")
-      
-      echo "Dev Terraform version: '$dev_tf_version'"
-      echo "Prod Terraform version: '$prod_tf_version'"
-      echo "Globals Terraform version: '$globals_tf_version'"
-      
-      if [ "$dev_tf_version" != "$prod_tf_version" ] || [ "$dev_tf_version" != "$globals_tf_version" ]; then
-        echo "❌ ERREUR: Contraintes Terraform incohérentes"
-        echo "   Dev:     '$dev_tf_version'"
-        echo "   Prod:    '$prod_tf_version'"
-        echo "   Globals: '$globals_tf_version'"
-        exit 1
-      fi
-      
-      if echo "$dev_tf_version" | grep -q "1.12.1"; then
-        echo "✅ Contraintes respectent la version minimale 1.12.1"
-      else
-        echo "❌ Contraintes ne respectent pas la version minimale 1.12.1"
-        exit 1
-      fi
-      
-      echo "✅ Contraintes cohérentes entre tous les environnements"
-    
-    # Test d'application des contraintes
-    - |
-      echo "📋 Test d'application des contraintes sur les environnements..."
-      
-      for env in dev prod; do
-        echo "🧪 Test environnement: $env"
-        cd "terraform/environments/$env"
-        
-        terraform init -backend=false
-        terraform validate
-        
-        if [ $? -eq 0 ]; then
-          echo "✅ Environnement $env compatible avec les contraintes"
-        else
-          echo "❌ Environnement $env incompatible avec les contraintes"
-          exit 1
-        fi
-        
-        cd ../../../
-      done
-    
-    # Génération du rapport de validation
-    - |
-      echo "📊 Génération du rapport de validation des versions..."
-      cat > version_validation_report.json << EOF
-      {
-        "validation_date": "$(date -Iseconds)",
-        "terraform_version_used": "${TF_VERSION}",
-        "validation_status": "SUCCESS",
-        "auto_formatting_applied": $format_changes,
-        "files_validated": [
-          "terraform/globals/versions.tf",
-          "terraform/environments/dev/versions.tf",
-          "terraform/environments/prod/versions.tf"
-        ],
-        "constraints_verified": {
-          "terraform_version": "$dev_tf_version",
-          "provider_local": "~> 2.5",
-          "provider_null": "~> 3.2"
-        },
-        "environments_tested": ["dev", "prod"],
-        "consistency_check": "PASSED",
-        "pipeline_info": {
-          "runner_type": "shared",
-          "branch": "$CI_COMMIT_BRANCH",
-          "commit": "$CI_COMMIT_SHA"
-        }
-      }
-      EOF
-      
-      echo "📄 Rapport de validation généré:"
-      cat version_validation_report.json | jq '.'
-    
-    # Sauvegarde des fichiers formatés
-    - |
-      echo "💾 Préparation des artefacts..."
-      mkdir -p formatted_files
-      cp terraform/globals/versions.tf formatted_files/globals_versions.tf
-      cp terraform/environments/dev/versions.tf formatted_files/dev_versions.tf
-      cp terraform/environments/prod/versions.tf formatted_files/prod_versions.tf
-    
-    - echo "🎉 Validation des versions Terraform terminée avec succès"
-  
+    - chmod +x .gitlab/scripts/terraform/validate-versions.sh
+    - .gitlab/scripts/terraform/validate-versions.sh
   artifacts:
     paths:
       - version_validation_report.json
@@ -192,40 +30,7 @@ validate:
   variables:
     ENV: "all"
   script:
-    - echo "🔍 Validation globale du code Terraform..."
-    - cd ${TF_ROOT}
-    
-    # Validation du module globals
-    - echo "📋 Validation complète du module globals..."
-    - cd ../globals && terraform init -backend=false && terraform validate
-    - cd ../environments
-    
-    # Validation de tous les environnements
-    - |
-      for env in dev prod; do
-        echo "📋 Validation environnement: $env"
-        if [ ! -d "$env" ]; then
-          echo "❌ Dossier $env inexistant"
-          exit 1
-        fi
-        cd "$env"
-        
-        if [ ! -f "versions.tf" ]; then
-          echo "❌ Fichier versions.tf manquant dans $env"
-          exit 1
-        fi
-        
-        terraform init -backend=false
-        terraform validate
-        if [ $? -eq 0 ]; then
-          echo "✅ $env validé avec succès (main.tf + versions.tf)"
-        else
-          echo "❌ Erreur de validation pour $env"
-          exit 1
-        fi
-        cd ..
-      done
-    - echo "🎉 Validation globale réussie avec la nouvelle structure versions"
-  
+    - chmod +x .gitlab/scripts/terraform/validate-syntax.sh
+    - .gitlab/scripts/terraform/validate-syntax.sh all
   dependencies:
     - validate_versions

@@ -1,8 +1,8 @@
 # =============================================================================
 # TEMPLATES TERRAFORM - GITLAB CI/CD (VERSION REFACTORISÉE)
 # =============================================================================
-# Description : Templates spécialisés Terraform avec gestion d'erreurs avancée
-# Version     : 2.0.0 - Refactorisation DRY
+# Description : Templates spécialisés Terraform utilisant des scripts externes
+# Version     : 3.0.0 - Scripts externalisés
 # =============================================================================
 
 # =============================================================================
@@ -11,34 +11,8 @@
 
 .install_terraform:
   before_script:
-    - echo "🔍 Diagnostic cache Terraform v${TF_VERSION}..."
-    - |
-      echo "Variables d'environnement:"
-      echo "TF_ROOT: ${TF_ROOT}"
-      echo "CI_PROJECT_DIR: ${CI_PROJECT_DIR}"
-      echo "PWD: $(pwd)"
-      
-    - echo "🔧 Installation de Terraform v${TF_VERSION}..."
-    - apk add --no-cache curl unzip bash git openssh ca-certificates jq
-    
-    # Cache optimisé pour shared runners
-    - export TF_CACHE_DIR="/tmp/terraform-cache-${TF_VERSION}"
-    - mkdir -p "$TF_CACHE_DIR"
-    
-    - |
-      if [ ! -f "$TF_CACHE_DIR/terraform" ]; then
-        echo "📥 Téléchargement de Terraform..."
-        curl -SLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
-        unzip "terraform_${TF_VERSION}_linux_amd64.zip" -d "$TF_CACHE_DIR/"
-        chmod +x "$TF_CACHE_DIR/terraform"
-        echo "✅ Terraform téléchargé et mis en cache"
-      else
-        echo "♻️  Terraform trouvé dans le cache"
-      fi
-    
-    - cp "$TF_CACHE_DIR/terraform" /usr/local/bin/terraform
-    - terraform --version
-    - echo "✅ Terraform installé avec succès"
+    - chmod +x .gitlab/scripts/terraform/install-terraform.sh
+    - .gitlab/scripts/terraform/install-terraform.sh "${TF_VERSION}"
 
 # =============================================================================
 # TEMPLATES DE BASE TERRAFORM
@@ -54,35 +28,6 @@
     TF_INPUT: "false"
     TF_CLI_ARGS: "-no-color"
 
-.terraform_init:
-  extends: .terraform_base
-  script:
-    - |
-      echo "🔧 Initialisation Terraform pour $ENV..."
-      cd ${TF_ROOT}/${ENV}
-      
-      # Vérification de l'existence du répertoire
-      if [ ! -d "." ]; then
-        echo "❌ Répertoire $ENV non trouvé dans ${TF_ROOT}"
-        exit 1
-      fi
-      
-      # Initialisation avec retry
-      for attempt in 1 2 3; do
-        echo "🔄 Tentative d'initialisation $attempt/3..."
-        terraform init -backend=false
-        if [ $? -eq 0 ]; then
-          echo "✅ Initialisation réussie"
-          break
-        elif [ $attempt -eq 3 ]; then
-          echo "❌ Échec de l'initialisation après 3 tentatives"
-          exit 1
-        else
-          echo "⚠️  Tentative $attempt échouée, retry..."
-          sleep 2
-        fi
-      done
-
 # =============================================================================
 # TEMPLATES SPÉCIALISÉS PAR STAGE
 # =============================================================================
@@ -92,29 +37,8 @@
     - .terraform_base
     - .base_validate
   script:
-    - !reference [.validate_environment, script]
-    - !reference [.terraform_init, script]
-    - |
-      echo "🔍 Validation Terraform pour $ENV..."
-      cd ${TF_ROOT}/${ENV}
-      
-      # Validation syntaxique
-      terraform validate
-      if [ $? -eq 0 ]; then
-        echo "✅ Validation syntaxique réussie"
-      else
-        echo "❌ Erreurs de validation détectées"
-        exit 1
-      fi
-      
-      # Vérification des contraintes de versions
-      echo "📋 Vérification des contraintes de versions..."
-      if [ -f "versions.tf" ]; then
-        echo "✅ Fichier versions.tf trouvé"
-        cat versions.tf | grep -E "(required_version|version)" || echo "⚠️  Aucune contrainte détectée"
-      else
-        echo "⚠️  Fichier versions.tf manquant"
-      fi
+    - chmod +x .gitlab/scripts/terraform/validate-syntax.sh
+    - .gitlab/scripts/terraform/validate-syntax.sh "${ENV:-all}"
 
 .terraform_plan:
   extends: 
@@ -123,59 +47,8 @@
   variables:
     PLAN_FILE: "tfplan"
   script:
-    - !reference [.validate_environment, script]
-    - !reference [.terraform_init, script]
-    - |
-      echo "📋 Planification Terraform pour $ENV..."
-      cd ${TF_ROOT}/${ENV}
-      
-      # Planification avec gestion des exit codes
-      set +e  # Désactive l'arrêt automatique sur erreur
-      terraform plan -out=${PLAN_FILE} -detailed-exitcode
-      plan_exit_code=$?
-      set -e  # Réactive l'arrêt automatique sur erreur
-      
-      echo "🔍 Code de sortie terraform plan: $plan_exit_code"
-      
-      case $plan_exit_code in
-        0)
-          echo "✅ Aucun changement détecté"
-          echo "PLAN_STATUS=no_changes" > ./plan_status.env
-          plan_result="success"
-          ;;
-        1)
-          echo "❌ Erreur lors de la planification"
-          echo "PLAN_STATUS=error" > ./plan_status.env
-          exit 1
-          ;;
-        2)
-          echo "📝 Changements détectés, plan généré"
-          echo "PLAN_STATUS=changes_detected" > ./plan_status.env
-          plan_result="success"
-          ;;
-        *)
-          echo "❌ Code de sortie inattendu: $plan_exit_code"
-          echo "PLAN_STATUS=unknown_error" > ./plan_status.env
-          exit 1
-          ;;
-      esac
-      
-      echo "PLAN_RESULT=$plan_result" >> ./plan_status.env
-      echo "PLAN_EXIT_CODE=$plan_exit_code" >> ./plan_status.env
-      
-      # Génération du résumé du plan
-      echo "📊 Génération du résumé du plan..."
-      terraform show -no-color ${PLAN_FILE} > plan_output.txt 2>&1 || true
-      
-      echo "=== RÉSUMÉ DU PLAN TERRAFORM ($ENV) ==="
-      echo "Nombre de lignes: $(wc -l < plan_output.txt)"
-      grep -E "(Plan:|No changes)" plan_output.txt || echo "Plan généré"
-      
-      echo ""
-      echo "=== APERÇU DES CHANGEMENTS ==="
-      head -30 plan_output.txt
-      echo ""
-      echo "... (plan complet sauvegardé dans plan_output.txt)"
+    - chmod +x .gitlab/scripts/terraform/plan-environment.sh
+    - .gitlab/scripts/terraform/plan-environment.sh "$ENV"
   artifacts:
     paths:
       - ${TF_ROOT}/${ENV}/${PLAN_FILE}
@@ -191,44 +64,8 @@
   variables:
     PLAN_FILE: "tfplan"
   script:
-    - !reference [.validate_environment, script]
-    - |
-      if [ "$ENV" = "prod" ]; then
-        echo "🔐 Validations supplémentaires pour la production..."
-        if [ "$CI_COMMIT_BRANCH" != "$PRODUCTION_BRANCH" ]; then
-          echo "❌ Déploiement production autorisé uniquement depuis $PRODUCTION_BRANCH"
-          exit 1
-        fi
-        echo "👤 Déploiement par: $GITLAB_USER_NAME ($GITLAB_USER_EMAIL)"
-      fi
-    - |
-      echo "🚀 Application Terraform pour $ENV..."
-      cd ${TF_ROOT}/${ENV}
-      
-      # Vérification de l'existence du plan
-      if [ ! -f "${PLAN_FILE}" ]; then
-        echo "❌ Fichier plan non trouvé: ${PLAN_FILE}"
-        echo "📋 Fichiers disponibles:"
-        ls -la .
-        exit 1
-      fi
-      
-      # Sauvegarde de l'état actuel (si existe)
-      if [ -f "terraform.tfstate" ]; then
-        echo "💾 Sauvegarde de l'état actuel..."
-        cp terraform.tfstate "terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)"
-      fi
-      
-      # Application du plan
-      terraform apply -auto-approve ${PLAN_FILE}
-      
-      # Récupération des outputs
-      echo "📊 Récupération des outputs..."
-      terraform output -json > terraform_outputs.json || echo "⚠️  Aucun output disponible"
-      
-      # Validation post-déploiement
-      echo "✅ Validation post-déploiement..."
-      terraform validate || echo "⚠️  Validation post-déploiement échouée"
+    - chmod +x .gitlab/scripts/terraform/apply-environment.sh
+    - .gitlab/scripts/terraform/apply-environment.sh "$ENV"
   artifacts:
     paths:
       - ${TF_ROOT}/${ENV}/terraform_outputs.json
@@ -294,18 +131,5 @@
     - .terraform_base
     - .base_cleanup
   script:
-    - |
-      echo "🧹 Nettoyage des ressources Terraform..."
-      
-      # Nettoyage des anciens plans
-      find ${TF_ROOT} -name "tfplan" -mtime +7 -delete 2>/dev/null || true
-      find ${TF_ROOT} -name "*.backup.*" -mtime +30 -delete 2>/dev/null || true
-      
-      # Nettoyage des rapports de validation
-      find . -name "version_validation_report.json" -mtime +7 -delete 2>/dev/null || true
-      find ${TF_ROOT} -name "version-constraints.json" -mtime +30 -delete 2>/dev/null || true
-      
-      # Nettoyage des logs
-      find /tmp -name "*.log" -mtime +1 -delete 2>/dev/null || true
-      
-      echo "✅ Nettoyage Terraform terminé"
+    - chmod +x .gitlab/scripts/terraform/cleanup-terraform.sh
+    - .gitlab/scripts/terraform/cleanup-terraform.sh
