@@ -20,6 +20,7 @@
     ANSIBLE_STDOUT_CALLBACK: "yaml"
     ANSIBLE_GATHER_FACTS: "True"
   before_script:
+    - apk add --no-cache bash
     - chmod +x .gitlab/scripts/ansible/setup-ansible.sh
     - .gitlab/scripts/ansible/setup-ansible.sh
 
