@@ -11,6 +11,7 @@
 
 .install_terraform:
   before_script:
+    - apk add --no-cache bash
     - chmod +x .gitlab/scripts/terraform/install-terraform.sh
     - .gitlab/scripts/terraform/install-terraform.sh "${TF_VERSION}"
 
