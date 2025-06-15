@@ -1,9 +1,8 @@
 # =============================================================================
-# TEMPLATES GLOBAUX RÉUTILISABLES - GITLAB CI/CD
+# TEMPLATES GLOBAUX RÉUTILISABLES - GITLAB CI/CD (VERSION REFACTORISÉE)
 # =============================================================================
-# Description : Templates transverses pour éliminer les duplications
-# Version     : 1.0.0
-# Auteur      : Infrastructure Team
+# Description : Templates transverses utilisant des scripts externes
+# Version     : 2.0.0 - Scripts externalisés
 # =============================================================================
 
 # =============================================================================
@@ -12,13 +11,8 @@
 
 .setup_ssh:
   before_script:
-    - echo "🔐 Configuration SSH standardisée..."
-    - apk add --no-cache git openssh ca-certificates
-    - mkdir -p ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-    - chmod 600 ~/.ssh/id_ed25519
-    - ssh-keyscan github.com >> ~/.ssh/known_hosts
-    - echo "✅ Configuration SSH terminée"
+    - chmod +x .gitlab/scripts/utils/ssh-setup.sh
+    - .gitlab/scripts/utils/ssh-setup.sh github
 
 # =============================================================================
 # GESTION STANDARD DES ARTIFACTS
@@ -84,19 +78,8 @@
   variables:
     ERROR_REPORTING: "true"
   after_script:
-    - |
-      if [ "$CI_JOB_STATUS" = "failed" ]; then
-        echo "❌ Job échoué: $CI_JOB_NAME"
-        echo "📋 Commit: $CI_COMMIT_SHA"
-        echo "🌿 Branche: $CI_COMMIT_BRANCH"
-        echo "👤 Auteur: $GITLAB_USER_NAME"
-        
-        # Sauvegarde des logs d'erreur pour debug
-        mkdir -p /tmp/error_logs 2>/dev/null || true
-        find . -name "*.log" -type f -exec cp {} /tmp/error_logs/ \; 2>/dev/null || true
-        
-        echo "🔍 Logs d'erreur sauvegardés dans /tmp/error_logs/"
-      fi
+    - chmod +x .gitlab/scripts/utils/error-handling.sh
+    - .gitlab/scripts/utils/error-handling.sh
 
 # =============================================================================
 # TIMEOUTS STANDARDISÉS
@@ -161,27 +144,10 @@
 
 .validate_environment:
   script:
-    - |
-      echo "🔍 Validation de l'environnement $ENV..."
-      if [ -z "$ENV" ]; then
-        echo "❌ Variable ENV non définie"
-        exit 1
-      fi
-      
-      if ! echo "$AVAILABLE_ENVIRONMENTS" | grep -q "$ENV"; then
-        echo "❌ Environnement $ENV non supporté"
-        echo "   Environnements disponibles: $AVAILABLE_ENVIRONMENTS"
-        exit 1
-      fi
-      
-      echo "✅ Environnement $ENV validé"
+    - chmod +x .gitlab/scripts/utils/environment-validation.sh
+    - .gitlab/scripts/utils/environment-validation.sh "$ENV"
 
 .validate_branch_prod:
   script:
-    - |
-      if [ "$ENV" = "prod" ] && [ "$CI_COMMIT_BRANCH" != "$PRODUCTION_BRANCH" ]; then
-        echo "❌ Déploiement production autorisé uniquement depuis $PRODUCTION_BRANCH"
-        echo "   Branche actuelle: $CI_COMMIT_BRANCH"
-        exit 1
-      fi
-      echo "✅ Branche validée pour l'environnement $ENV"
+    - chmod +x .gitlab/scripts/utils/environment-validation.sh
+    - .gitlab/scripts/utils/environment-validation.sh "$ENV" --check-branch
