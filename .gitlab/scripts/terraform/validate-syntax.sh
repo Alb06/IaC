@@ -1,13 +1,13 @@
 #!/bin/bash
 # =============================================================================
-# VALIDATE-SYNTAX.SH - Validation Syntaxique Terraform
+# VALIDATE-SYNTAX.SH - Validation Syntaxique Terraform (CORRIGÉ)
 # =============================================================================
 # Description : Validation syntaxique complète de tous les environnements
 # Usage       : ./validate-syntax.sh [environment]
 # Exemple     : ./validate-syntax.sh dev
 #               ./validate-syntax.sh (tous les environnements)
 # Auteur      : Infrastructure Team
-# Version     : 1.0.0
+# Version     : 1.0.1 - Correction navigation répertoires
 # =============================================================================
 
 # Chargement des fonctions communes
@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/../utils/common.sh"
 
 readonly TARGET_ENV="${1:-all}"
 readonly ENVIRONMENTS=("dev" "prod")
+init_project_root
 
 # =============================================================================
 # FONCTIONS DE VALIDATION
@@ -28,7 +29,7 @@ readonly ENVIRONMENTS=("dev" "prod")
 validate_globals_module() {
     print_header "Validation du Module Globals"
     
-    local globals_dir="terraform/globals"
+    local globals_dir="$PROJECT_ROOT/terraform/globals"
     
     validate_directory_exists "$globals_dir"
     
@@ -43,14 +44,14 @@ validate_globals_module() {
     log_step "Validation syntaxique du module globals..."
     terraform validate
     
-    cd - >/dev/null || return 1
+    cd "$PROJECT_ROOT" || return 1
     
     log_success "Module globals validé avec succès"
 }
 
 validate_environment() {
     local env="$1"
-    local env_dir="terraform/environments/$env"
+    local env_dir="$PROJECT_ROOT/terraform/environments/$env"
     
     log_step "📋 Validation environnement: $env"
     
@@ -73,7 +74,7 @@ validate_environment() {
     log_step "Validation syntaxique de l'environnement $env..."
     terraform validate
     
-    cd - >/dev/null || return 1
+    cd "$PROJECT_ROOT" || return 1
     
     log_success "$env validé avec succès (main.tf + versions.tf)"
 }
@@ -81,25 +82,24 @@ validate_environment() {
 validate_all_environments() {
     print_header "Validation de Tous les Environnements"
     
-    local tf_root="${TF_ROOT:-terraform/environments}"
+    local environments_dir="$PROJECT_ROOT/terraform/environments"
     
-    validate_directory_exists "$tf_root"
+    validate_directory_exists "$environments_dir"
     
-    cd "$tf_root" || {
-        log_error "Impossible d'accéder au répertoire: $tf_root"
-        return 1
-    }
+    log_info "Validation depuis le répertoire: $environments_dir"
+    log_info "Environnements à valider: ${ENVIRONMENTS[*]}"
     
     for env in "${ENVIRONMENTS[@]}"; do
-        if [[ ! -d "$env" ]]; then
-            log_error "Dossier $env inexistant dans $tf_root"
+        local env_path="$environments_dir/$env"
+        if [[ ! -d "$env_path" ]]; then
+            log_error "Dossier $env inexistant dans $environments_dir"
+            log_info "Contenu du répertoire environments:"
+            ls -la "$environments_dir" || true
             return 1
         fi
         
         validate_environment "$env"
     done
-    
-    cd - >/dev/null || return 1
     
     log_success "Tous les environnements validés avec succès"
 }
@@ -127,25 +127,26 @@ perform_additional_checks() {
     log_step "Vérification de la cohérence des fichiers..."
     
     local required_files_globals=(
-        "terraform/globals/main.tf"
-        "terraform/globals/versions.tf"
-        "terraform/globals/outputs.tf"
-        "terraform/globals/variables.tf"
+        "$PROJECT_ROOT/terraform/globals/main.tf"
+        "$PROJECT_ROOT/terraform/globals/versions.tf"
+        "$PROJECT_ROOT/terraform/globals/outputs.tf"
+        "$PROJECT_ROOT/terraform/globals/variables.tf"
     )
     
     for file in "${required_files_globals[@]}"; do
         if [[ -f "$file" ]]; then
-            log_success "Fichier trouvé: $file"
+            log_success "Fichier trouvé: $(basename "$file")"
         else
-            log_warning "Fichier manquant: $file"
+            log_warning "Fichier manquant: $(basename "$file")"
         fi
     done
     
     # Vérification des templates
-    if [[ -d "terraform/templates" ]]; then
+    local templates_dir="$PROJECT_ROOT/terraform/templates"
+    if [[ -d "$templates_dir" ]]; then
         log_step "Validation des templates..."
-        find terraform/templates -name "*.tpl" -type f | while read -r template; do
-            log_info "Template trouvé: $template"
+        find "$templates_dir" -name "*.tpl" -type f | while read -r template; do
+            log_info "Template trouvé: $(basename "$template")"
         done
     fi
     
@@ -161,6 +162,15 @@ main() {
     
     print_header "Validation Syntaxique Terraform"
     log_info "Scope de validation: $validation_scope"
+    log_info "Répertoire de travail: $PROJECT_ROOT"
+    
+    # Vérification de la structure du projet
+    if [[ ! -d "$PROJECT_ROOT/terraform" ]]; then
+        log_error "Répertoire terraform non trouvé dans: $PROJECT_ROOT"
+        log_info "Contenu du répertoire racine:"
+        ls -la "$PROJECT_ROOT" || true
+        return 1
+    fi
     
     # Validation du module globals (toujours requis)
     validate_globals_module
