@@ -103,7 +103,6 @@ init_project_root() {
         exit 1
     fi
 
-    #readonly PROJECT_ROOT
     log_debug "PROJECT_ROOT validé: $PROJECT_ROOT"
 }
 
