@@ -33,6 +33,36 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 
 # =============================================================================
+# FONCTIONS DE LOGGING
+# =============================================================================
+
+log_info() {
+    echo -e "${BLUE}ℹ️  [INFO]${NC} $*" >&2
+}
+
+log_success() {
+    echo -e "${GREEN}✅ [SUCCESS]${NC} $*" >&2
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠️  [WARNING]${NC} $*" >&2
+}
+
+log_error() {
+    echo -e "${RED}❌ [ERROR]${NC} $*" >&2
+}
+
+log_debug() {
+    if [[ "${DEBUG:-false}" == "true" ]]; then
+        echo -e "${PURPLE}🔍 [DEBUG]${NC} $*" >&2
+    fi
+}
+
+log_step() {
+    echo -e "${CYAN}🔄 [STEP]${NC} $*" >&2
+}
+
+# =============================================================================
 # FONCTIONS DE NAVIGATION PROJET
 # =============================================================================
 
@@ -78,36 +108,6 @@ init_project_root() {
 }
 
 init_project_root
-
-# =============================================================================
-# FONCTIONS DE LOGGING
-# =============================================================================
-
-log_info() {
-    echo -e "${BLUE}ℹ️  [INFO]${NC} $*" >&2
-}
-
-log_success() {
-    echo -e "${GREEN}✅ [SUCCESS]${NC} $*" >&2
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  [WARNING]${NC} $*" >&2
-}
-
-log_error() {
-    echo -e "${RED}❌ [ERROR]${NC} $*" >&2
-}
-
-log_debug() {
-    if [[ "${DEBUG:-false}" == "true" ]]; then
-        echo -e "${PURPLE}🔍 [DEBUG]${NC} $*" >&2
-    fi
-}
-
-log_step() {
-    echo -e "${CYAN}🔄 [STEP]${NC} $*" >&2
-}
 
 # =============================================================================
 # FONCTIONS DE VALIDATION
