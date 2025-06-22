@@ -5,10 +5,11 @@
 # Synchronisation vers GitHub
 mirror_to_github:
   extends: 
-    - .setup_ssh
     - .base_sync
     - .rules_sync
   image: alpine:latest
+  before_script:
+    - !reference [.setup_ssh_commands, script]
   script:
     - echo "🔄 Synchronisation vers GitHub..."
     - git remote add mirror git@github.com:Alb06/IaC.git || true

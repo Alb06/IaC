@@ -1,17 +1,17 @@
 # =============================================================================
-# TEMPLATES TERRAFORM - GITLAB CI/CD (VERSION REFACTORISÉE)
+# TEMPLATES TERRAFORM - GITLAB CI/CD (VERSION CORRIGÉE)
 # =============================================================================
-# Description : Templates spécialisés Terraform utilisant des scripts externes
-# Version     : 3.0.0 - Scripts externalisés
+# Description : Templates spécialisés Terraform avec gestion d'erreurs améliorée
+# Version     : 3.1.0 - Correction validation artefacts et dépendances
 # =============================================================================
 
 # =============================================================================
 # INSTALLATION TERRAFORM OPTIMISÉE
 # =============================================================================
 
-.install_terraform:
-  before_script:
-    - apk add --no-cache bash
+.terraform_install:
+  script: &terraform_install_script
+    - apk add --no-cache bash curl unzip
     - chmod +x .gitlab/scripts/terraform/install-terraform.sh
     - .gitlab/scripts/terraform/install-terraform.sh "${TF_VERSION}"
 
@@ -20,14 +20,24 @@
 # =============================================================================
 
 .terraform_base:
-  extends: 
-    - .install_terraform
-    - .error_handling
   image: alpine:latest
+  extends:
+    - .error_handling
   variables:
     TF_IN_AUTOMATION: "true"
     TF_INPUT: "false"
     TF_CLI_ARGS: "-no-color"
+  before_script: 
+    - *terraform_install_script
+
+# =============================================================================
+# DIAGNOSTIC PRÉREQUIS (NOUVEAU)
+# =============================================================================
+
+.terraform_diagnose:
+  script: &terraform_diagnose_script
+    - chmod +x .gitlab/scripts/utils/diagnose-pipeline.sh
+    - .gitlab/scripts/utils/diagnose-pipeline.sh "$ENV"
 
 # =============================================================================
 # TEMPLATES SPÉCIALISÉS PAR STAGE
@@ -57,6 +67,8 @@
       - ${TF_ROOT}/${ENV}/plan_output.txt
     reports:
       dotenv: ${TF_ROOT}/${ENV}/plan_status.env
+    expire_in: 1 week
+    when: always
 
 .terraform_apply:
   extends: 
@@ -64,6 +76,9 @@
     - .base_apply
   variables:
     PLAN_FILE: "tfplan"
+  before_script: 
+    - !reference [.terraform_install, script] 
+    - !reference [.terraform_diagnose, script]
   script:
     - chmod +x .gitlab/scripts/terraform/apply-environment.sh
     - .gitlab/scripts/terraform/apply-environment.sh "$ENV"
@@ -72,7 +87,10 @@
       - ${TF_ROOT}/${ENV}/terraform_outputs.json
       - ${TF_ROOT}/${ENV}/terraform.tfstate.backup.*
       - ${TF_ROOT}/${ENV}/version-constraints.json
+      - ${TF_ROOT}/${ENV}/deployment_metadata.json
       - ansible/inventory/${ENV}
+    expire_in: 7 days
+    when: always
 
 # =============================================================================
 # TEMPLATES SPÉCIALISÉS PAR ENVIRONNEMENT
@@ -112,6 +130,12 @@
     - .rules_manual_dev
   variables:
     ENV: dev
+  # Dépendances explicites avec vérification
+  dependencies:
+    - plan_dev
+  needs:
+    - job: plan_dev
+      artifacts: true
 
 .terraform_apply_prod:
   extends: 
@@ -122,6 +146,12 @@
   environment:
     name: production
     action: start
+  # Dépendances explicites avec vérification
+  dependencies:
+    - plan_prod
+  needs:
+    - job: plan_prod
+      artifacts: true
 
 # =============================================================================
 # TEMPLATES DE MAINTENANCE
@@ -130,7 +160,26 @@
 .terraform_cleanup:
   extends: 
     - .terraform_base
-    - .base_cleanup
+    - .timeout_short
   script:
     - chmod +x .gitlab/scripts/terraform/cleanup-terraform.sh
     - .gitlab/scripts/terraform/cleanup-terraform.sh
+
+# =============================================================================
+# TEMPLATE DE RÉCUPÉRATION D'ERREUR
+# =============================================================================
+
+.terraform_recovery:
+  extends: 
+    - .terraform_base
+    - .timeout_short
+  variables:
+    RECOVERY_MODE: "true"
+  script:
+    - echo "🔧 Mode récupération activé pour l'environnement = $ENV"
+    - chmod +x .gitlab/scripts/utils/diagnose-pipeline.sh
+    - .gitlab/scripts/utils/diagnose-pipeline.sh "$ENV"
+    - chmod +x .gitlab/scripts/terraform/cleanup-terraform.sh
+    - .gitlab/scripts/terraform/cleanup-terraform.sh --recovery
+  when: manual
+  allow_failure: true

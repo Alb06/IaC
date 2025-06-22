@@ -4,12 +4,10 @@
 
 # Déploiement Ansible dev
 ansible_dev:
-  extends: .ansible_deploy_dev
+  extends: 
+    - .ansible_deploy_dev
   variables:
     PLAYBOOK_PATH: "playbooks/setup.yml"
-  before_script:
-    - !reference [.ansible_validate_inventory, script]
-    - !reference [.ansible_connectivity_test, script]
   dependencies:
     - apply_dev
   tags:
