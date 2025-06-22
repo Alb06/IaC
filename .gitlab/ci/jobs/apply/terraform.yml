@@ -1,15 +1,72 @@
 # =============================================================================
-# JOBS D'APPLICATION TERRAFORM (VERSION REFACTORISÉE)
+# JOBS D'APPLICATION TERRAFORM (VERSION CORRIGÉE)
+# =============================================================================
+# Description : Jobs d'application avec diagnostic et gestion d'erreurs
+# Version : 2.0.0 - Ajout diagnostic et récupération d'erreur
 # =============================================================================
 
 # Application en environnement dev
 apply_dev:
   extends: .terraform_apply_dev
+  stage: apply
+  timeout: 10m
   dependencies:
     - plan_dev
+  needs:
+    - job: plan_dev
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: false
+  retry:
+    max: 1
+    when:
+      - script_failure
 
 # Application en environnement prod
 apply_prod:
   extends: .terraform_apply_prod
+  stage: apply
+  timeout: 10m
   dependencies:
     - plan_prod
+  needs:
+    - job: plan_prod
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: false
+  retry:
+    max: 1
+    when:
+      - script_failure
+
+# =============================================================================
+# JOBS DE RÉCUPÉRATION EN CAS D'ERREUR (NOUVEAUX)
+# =============================================================================
+
+# Récupération dev
+recover_dev:
+  extends: .terraform_recovery
+  stage: cleanup
+  variables:
+    ENV: dev
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+  dependencies: []
+  
+# Récupération prod  
+recover_prod:
+  extends: .terraform_recovery
+  stage: cleanup
+  variables:
+    ENV: prod
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+  dependencies: []

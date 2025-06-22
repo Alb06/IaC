@@ -13,8 +13,6 @@ include:
   - local: '.gitlab/ci/templates/globals.yml'
   - local: '.gitlab/ci/templates/terraform.yml'
   - local: '.gitlab/ci/templates/ansible.yml'
-  # - local: '.gitlab/ci/templates/sync.yml'
-  # - local: '.gitlab/ci/templates/cleanup.yml'
 
   - local: '.gitlab/ci/jobs/apply/terraform.yml'
   - local: '.gitlab/ci/jobs/cleanup/terraform.yml'

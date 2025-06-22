@@ -4,6 +4,7 @@
 
 # Nettoyage des ressources temporaires
 cleanup:
+  stage: cleanup
   extends: .terraform_cleanup
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'

@@ -19,7 +19,7 @@
     ANSIBLE_HOST_KEY_CHECKING: "False"
     ANSIBLE_STDOUT_CALLBACK: "yaml"
     ANSIBLE_GATHER_FACTS: "True"
-  before_script:
+  before_script: &ansible_base_before_script
     - apk add --no-cache bash
     - chmod +x .gitlab/scripts/ansible/setup-ansible.sh
     - .gitlab/scripts/ansible/setup-ansible.sh
@@ -30,7 +30,7 @@
 
 .ansible_validate_inventory:
   extends: .ansible_base
-  script:
+  script: &ansible_validate_inventory_script
     - chmod +x .gitlab/scripts/ansible/validate-inventory.sh
     - .gitlab/scripts/ansible/validate-inventory.sh "$ENV"
 
@@ -39,8 +39,9 @@
 # =============================================================================
 
 .ansible_connectivity_test:
-  extends: .ansible_base
-  script:
+  extends: 
+    - .ansible_base
+  script: &ansible_connectivity_test_script
     - chmod +x .gitlab/scripts/ansible/test-connectivity.sh
     - .gitlab/scripts/ansible/test-connectivity.sh "$ENV"
 
@@ -49,12 +50,13 @@
 # =============================================================================
 
 .ansible_run_playbook:
-  extends: .ansible_base
+  extends: 
+    - .ansible_base
   variables:
     PLAYBOOK_PATH: ""
     ANSIBLE_EXTRA_VARS: ""
     CHECK_MODE: "false"
-  script:
+  script: &ansible_run_playbook_script
     - chmod +x .gitlab/scripts/ansible/run-playbook.sh
     - .gitlab/scripts/ansible/run-playbook.sh "$ENV" "$PLAYBOOK_PATH" "$CHECK_MODE"
 
@@ -62,10 +64,20 @@
 # TEMPLATES SPÉCIALISÉS PAR TYPE DE DÉPLOIEMENT
 # =============================================================================
 
+.ansible_deploy_scripts:
+  before_script:
+    - !reference [.ansible_base, before_script]
+    - !reference [.ansible_validate_inventory, script]
+    - !reference [.ansible_connectivity_test, script]
+  script: *ansible_run_playbook_script
+
 .ansible_deploy_dev:
   extends: 
+    - .ansible_validate_inventory
+    - .ansible_connectivity_test
     - .ansible_run_playbook
     - .rules_manual_dev
+    - .ansible_deploy_scripts
   variables:
     ENV: dev
     CHECK_MODE: "true"  # Mode check par défaut en dev
@@ -74,15 +86,13 @@
   extends: 
     - .ansible_run_playbook
     - .rules_manual_prod
+    - .validate_branch_prod_commands
   variables:
     ENV: prod
     CHECK_MODE: "false"  # Mode réel en production
   environment:
     name: production
     action: start
-  before_script:
-    - !reference [.ansible_base, before_script]
-    - !reference [.validate_branch_prod, script]
 
 # =============================================================================
 # TEMPLATES DE MAINTENANCE
