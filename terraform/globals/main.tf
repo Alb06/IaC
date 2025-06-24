@@ -3,7 +3,7 @@
 # =============================================================================
 # Description : Source unique de vérité pour toutes les configurations
 # Auteur      : Infrastructure Team
-# Version     : 1.1.0 - Ajout namespaces spécialisés
+# Version     : 1.2.0 - Ajout configuration monitoring Prometheus
 # =============================================================================
 
 # NOTE: Les contraintes Terraform sont maintenant dans versions.tf
@@ -47,7 +47,8 @@ locals {
     ubuntu       = "24.04"
     postgresql   = "17.5"
     gitlab_runner = "17.11.1"
-    kubectl      = "v1.33.1"  # 🆕 Ajout version kubectl
+    kubectl      = "v1.33.1"
+    prometheus   = "v2.53.0"  # 🆕 Version Prometheus
   }
 
   # Configuration réseau globale
@@ -61,14 +62,17 @@ locals {
 
   # Ports et services standards
   ports = {
-    ssh        = 22
-    http       = 80
-    https      = 443
-    k3s_api    = 6443
-    postgresql = 5432
+    ssh           = 22
+    http          = 80
+    https         = 443
+    k3s_api       = 6443
+    postgresql    = 5432
     gitlab_runner = 8093
-    redis      = 6379      # 🆕 Port Redis
-    memcached  = 11211     # 🆕 Port Memcached
+    redis         = 6379
+    memcached     = 11211
+    prometheus    = 9090      # 🆕 Port Prometheus
+    grafana       = 3000      # 🆕 Port Grafana (pour futur usage)
+    alertmanager  = 9093      # 🆕 Port AlertManager (pour futur usage)
   }
 
   # Configuration Docker
@@ -78,22 +82,22 @@ locals {
     volumes_path = "/opt/docker/volumes"
   }
 
-  # 🆕 Configuration Kubernetes étendue
+  # 🆕 Configuration Kubernetes étendue avec monitoring
   kubernetes = {
     cluster_name     = "homelab-k3s"
     # Namespaces étendus avec les nouveaux
     namespace_default    = "default"
     namespace_monitoring = "monitoring"
     namespace_ingress    = "ingress-nginx"
-    namespace_automation = "automation"    # 🆕 Nouveau namespace
-    namespace_databases  = "databases"     # 🆕 Nouveau namespace
-    namespace_cache      = "cache"         # 🆕 Nouveau namespace
+    namespace_automation = "automation"
+    namespace_databases  = "databases"
+    namespace_cache      = "cache"
     
     # Storage classes disponibles
     storage_class        = "local-path"
-    storage_class_ssd    = "local-ssd-fast"    # 🆕 Storage SSD haute performance
-    storage_class_standard = "local-standard"  # 🆕 Storage standard
-    storage_class_backup = "local-backup"      # 🆕 Storage pour backups
+    storage_class_ssd    = "local-ssd-fast"
+    storage_class_standard = "local-standard"
+    storage_class_backup = "local-backup"
     
     # Configuration des quotas par namespace
     quotas = {
@@ -128,6 +132,63 @@ locals {
     }
   }
 
+  # 🆕 Configuration Monitoring centralisée
+  monitoring = {
+    # Configuration Prometheus
+    prometheus = {
+      version = local.versions.prometheus
+      port    = local.ports.prometheus
+      storage = {
+        class = local.kubernetes.storage_class_ssd
+        size = var.environment == "prod" ? "200Gi" : "100Gi"
+      }
+      retention = {
+        time = var.environment == "prod" ? "30d" : "7d"
+        size = var.environment == "prod" ? "180GiB" : "90GiB"
+      }
+      resources = var.environment == "prod" ? {
+        requests = { cpu = "1000m", memory = "2Gi" }
+        limits   = { cpu = "2000m", memory = "4Gi" }
+      } : {
+        requests = { cpu = "500m", memory = "1Gi" }
+        limits   = { cpu = "1000m", memory = "2Gi" }
+      }
+      service_account = "monitoring-sa"
+    }
+    
+    # Configuration pour futurs composants
+    grafana = {
+      version = "11.4.0"  # Pour future implémentation
+      port    = local.ports.grafana
+      domain  = "grafana.${local.network.domain}"
+      storage = {
+        class = local.kubernetes.storage_class_ssd
+        size  = "20Gi"
+      }
+    }
+    
+    alertmanager = {
+      version = "v0.27.0"  # Pour future implémentation
+      port    = local.ports.alertmanager
+      storage = {
+        class = local.kubernetes.storage_class_standard
+        size  = "10Gi"
+      }
+    }
+    
+    # Configuration générale
+    namespace = local.kubernetes.namespace_monitoring
+    service_account = "monitoring-sa"
+    scrape_interval = "30s"
+    evaluation_interval = "30s"
+    
+    # Labels pour l'auto-découverte
+    labels = {
+      monitoring = "prometheus"
+      component  = "monitoring-stack"
+    }
+  }
+
   # Labels et tags communs
   common_tags = {
     project        = "homelab-iac"
@@ -146,9 +207,12 @@ locals {
       backup_retention   = "7d"
       monitoring_level   = "basic"
       auto_scaling      = false
-      # 🆕 Configuration K8s dev
+      # Configuration K8s dev
       kubernetes_quotas_enabled = false
       network_policies_enabled  = false
+      # 🆕 Configuration monitoring dev
+      monitoring_retention = "7d"
+      monitoring_storage   = "100Gi"
     }
     prod = {
       replicas          = 2
@@ -156,9 +220,12 @@ locals {
       backup_retention  = "30d"
       monitoring_level  = "full"
       auto_scaling     = true
-      # 🆕 Configuration K8s prod
+      # Configuration K8s prod
       kubernetes_quotas_enabled = true
       network_policies_enabled  = true
+      # 🆕 Configuration monitoring prod
+      monitoring_retention = "30d"
+      monitoring_storage   = "200Gi"
     }
   }
 

@@ -1,0 +1,27 @@
+apiVersion: v2
+name: prometheus
+description: Prometheus monitoring server for HomeLab Kubernetes cluster
+type: application
+version: 0.1.0
+appVersion: "v2.53.0"
+
+keywords:
+  - monitoring
+  - prometheus
+  - metrics
+  - observability
+
+maintainers:
+  - name: Infrastructure Team
+    email: infrastructure@homelab.local
+
+sources:
+  - https://prometheus.io/
+  - https://github.com/prometheus/prometheus
+
+dependencies: []
+
+annotations:
+  category: Monitoring
+  charts.homelab.local/managed-by: terraform
+  charts.homelab.local/environment: "{{ .Values.environment }}"

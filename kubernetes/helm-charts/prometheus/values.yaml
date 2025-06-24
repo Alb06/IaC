@@ -1,0 +1,202 @@
+# =============================================================================
+# PROMETHEUS HELM CHART - VALUES CONFIGURATION
+# =============================================================================
+# Description : Configuration par défaut pour le déploiement Prometheus
+# Auteur      : Infrastructure Team
+# Version     : 1.0.0
+# =============================================================================
+
+# Configuration globale
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "local-ssd-fast"
+
+# Configuration de l'environnement (surchargé par Terraform)
+environment: "prod"
+
+# Configuration Prometheus
+prometheus:
+  image:
+    registry: quay.io
+    repository: prometheus/prometheus
+    tag: "v2.53.0"
+    pullPolicy: IfNotPresent
+  
+  # Configuration du service
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+    annotations: {}
+  
+  # Configuration du stockage
+  persistence:
+    enabled: true
+    storageClass: "local-ssd-fast"
+    accessMode: ReadWriteOnce
+    size: 200Gi
+    annotations: {}
+  
+  # Configuration de la rétention
+  retention:
+    time: "30d"  # Surchargé par environnement
+    size: "180GiB"
+  
+  # Ressources allouées
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  # Configuration RBAC
+  serviceAccount:
+    create: false
+    name: "monitoring-sa"  # Utilise le SA existant
+  
+  # Configuration de sécurité
+  securityContext:
+    fsGroup: 2000
+    runAsUser: 1000
+    runAsNonRoot: true
+    runAsGroup: 3000
+  
+  # Configuration Prometheus
+  config:
+    global:
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      evaluation_interval: 30s
+      external_labels:
+        cluster: "homelab-k3s"
+        environment: "{{ .Values.environment }}"
+    
+    # Règles d'alerte (basiques pour cette étape)
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    # Configuration des scrape targets
+    scrape_configs:
+      # Prometheus lui-même
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      # Kubernetes API Server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - default
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+      
+      # Kubelet
+      - job_name: 'kubernetes-nodes-kubelet'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics
+      
+      # cAdvisor
+      - job_name: 'kubernetes-nodes-cadvisor'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+# Configuration par environnement
+environments:
+  dev:
+    retention:
+      time: "7d"
+      size: "50GiB"
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+  
+  prod:
+    retention:
+      time: "30d"
+      size: "180GiB"
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+# Configuration des ServiceMonitors
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+
+# Configuration des alertes (basiques)
+alerting:
+  enabled: true
+  rules:
+    basic:
+      enabled: true
+      
+# Ingress (désactivé pour cette étape - accès via port-forward)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+# Labels et annotations par défaut
+commonLabels:
+  app.kubernetes.io/name: prometheus
+  app.kubernetes.io/component: monitoring
+  app.kubernetes.io/part-of: monitoring-stack
+  app.kubernetes.io/managed-by: helm
+
+commonAnnotations:
+  helm.sh/chart: "prometheus-{{ .Chart.Version }}"
+  app.kubernetes.io/version: "{{ .Chart.AppVersion }}"
