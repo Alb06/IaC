@@ -1,0 +1,23 @@
+{{- if .Values.prometheus.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "prometheus.fullname" . }}-storage
+  namespace: monitoring
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.prometheus.persistence.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.prometheus.persistence.accessMode }}
+  storageClassName: {{ .Values.prometheus.persistence.storageClass | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.prometheus.persistence.size }}
+{{- end }}

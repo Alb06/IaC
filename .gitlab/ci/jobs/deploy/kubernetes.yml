@@ -1,8 +1,8 @@
 # =============================================================================
 # JOBS DE DÉPLOIEMENT KUBERNETES
 # =============================================================================
-# Description : Jobs pour le setup et la validation des namespaces K8s
-# Version     : 1.0.0
+# Description : Jobs pour le setup et la validation des namespaces K8s + Prometheus
+# Version     : 1.1.0 - Ajout déploiement Prometheus
 # =============================================================================
 
 # Setup des namespaces en dev
@@ -35,6 +35,26 @@ kubernetes_validate:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
   needs: []
+
+# 🆕 Déploiement Prometheus en dev
+deploy_prometheus_dev:
+  extends: .kubernetes_deploy_prometheus_dev
+  stage: kubernetes
+  dependencies:
+    - kubernetes_setup_dev
+  needs:
+    - job: kubernetes_setup_dev
+      artifacts: true
+
+# 🆕 Déploiement Prometheus en prod
+deploy_prometheus_prod:
+  extends: .kubernetes_deploy_prometheus_prod
+  stage: kubernetes
+  dependencies:
+    - kubernetes_setup_prod
+  needs:
+    - job: kubernetes_setup_prod
+      artifacts: true
 
 # Test de connectivité des namespaces
 kubernetes_test:

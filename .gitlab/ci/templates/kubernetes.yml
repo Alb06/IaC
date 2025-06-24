@@ -1,8 +1,8 @@
 # =============================================================================
-# TEMPLATES KUBERNETES - GITLAB CI/CD (CORRIGÉ)
+# TEMPLATES KUBERNETES - GITLAB CI/CD (VERSION ÉTENDUE PROMETHEUS)
 # =============================================================================
-# Description : Templates spécialisés pour les opérations Kubernetes
-# Version     : 1.0.1 - Correction paths et dépendances
+# Description : Templates spécialisés pour les opérations Kubernetes + Prometheus
+# Version     : 1.1.0 - Ajout templates Prometheus
 # =============================================================================
 
 # =============================================================================
@@ -84,6 +84,38 @@
     expire_in: 1 week
     when: always
 
+# 🆕 TEMPLATES PROMETHEUS
+# =============================================================================
+
+.kubernetes_deploy_prometheus:
+  extends: 
+    - .kubernetes_base
+    - .base_apply
+  variables:
+    DRY_RUN: "false"
+    NAMESPACE: "monitoring"
+    RELEASE_NAME: "prometheus"
+  script:
+    - chmod +x .gitlab/scripts/kubernetes/deploy-prometheus.sh
+    - .gitlab/scripts/kubernetes/deploy-prometheus.sh "$ENV" "$DRY_RUN"
+  artifacts:
+    paths:
+      - prometheus_deployment_report_*.json
+    expire_in: 1 week
+    when: always
+    reports:
+      dotenv: prometheus_deployment_report_*.json
+
+.kubernetes_prometheus_validate:
+  extends: 
+    - .kubernetes_base
+    - .base_validate
+  variables:
+    NAMESPACE: "monitoring"
+  script:
+    - chmod +x .gitlab/scripts/kubernetes/validate-prometheus.sh
+    - .gitlab/scripts/kubernetes/validate-prometheus.sh "$ENV"
+
 # =============================================================================
 # TEMPLATES PAR ENVIRONNEMENT
 # =============================================================================
@@ -105,6 +137,28 @@
     CLUSTER_NAME: "homelab-k3s"
   environment:
     name: kubernetes-production
+    action: start
+
+# 🆕 TEMPLATES PROMETHEUS PAR ENVIRONNEMENT
+# =============================================================================
+
+.kubernetes_deploy_prometheus_dev:
+  extends: 
+    - .kubernetes_deploy_prometheus
+    - .rules_manual_dev
+  variables:
+    ENV: dev
+    DRY_RUN: "false"
+
+.kubernetes_deploy_prometheus_prod:
+  extends: 
+    - .kubernetes_deploy_prometheus
+    - .rules_manual_prod
+  variables:
+    ENV: prod
+    DRY_RUN: "false"
+  environment:
+    name: prometheus-production
     action: start
 
 # =============================================================================
