@@ -1,0 +1,134 @@
+# =============================================================================
+# TEMPLATES KUBERNETES - GITLAB CI/CD (CORRIGÉ)
+# =============================================================================
+# Description : Templates spécialisés pour les opérations Kubernetes
+# Version     : 1.0.1 - Correction paths et dépendances
+# =============================================================================
+
+# =============================================================================
+# CONFIGURATION KUBECTL
+# =============================================================================
+
+.kubectl_setup:
+  script: &kubectl_setup_script
+    - apk add --no-cache curl bash jq
+    - chmod +x .gitlab/scripts/kubernetes/install-kubectl.sh
+    - .gitlab/scripts/kubernetes/install-kubectl.sh "${KUBECTL_VERSION}"
+
+# =============================================================================
+# TEMPLATE BASE KUBERNETES
+# =============================================================================
+
+.kubernetes_base:
+  image: alpine:latest
+  extends:
+    - .error_handling
+  variables:
+    KUBECONFIG: /tmp/kubeconfig
+    KUBECTL_VERSION: "v1.33.1"
+  before_script: 
+    - *kubectl_setup_script
+
+# =============================================================================
+# TEMPLATES SPÉCIALISÉS PAR OPÉRATION
+# =============================================================================
+
+.kubernetes_validate:
+  extends: 
+    - .kubernetes_base
+    - .base_validate
+  variables:
+    MANIFEST_PATH: "kubernetes/manifests"
+    CLUSTER_ACCESSIBLE: "auto"  # auto, true, false
+    VALIDATION_MODE: "offline"  # offline, online, hybrid
+  script:
+    - chmod +x .gitlab/scripts/kubernetes/validate-manifests.sh
+    - .gitlab/scripts/kubernetes/validate-manifests.sh "${MANIFEST_PATH}"
+  artifacts:
+    paths:
+      - manifest_validation_report.json
+    expire_in: 1 week
+    when: always
+    reports:
+      junit: manifest_validation_report.json  # Si on veut intégrer avec les rapports GitLab
+
+.kubernetes_apply:
+  extends: 
+    - .kubernetes_base
+    - .base_apply
+  variables:
+    DRY_RUN: "false"
+    FORCE: "false"
+    MANIFEST_PATH: "kubernetes/manifests"
+  script:
+    - chmod +x .gitlab/scripts/kubernetes/apply-manifests.sh
+    - .gitlab/scripts/kubernetes/apply-manifests.sh "${MANIFEST_PATH}" "$DRY_RUN" "$FORCE"
+
+.kubernetes_setup_namespaces:
+  extends: 
+    - .kubernetes_base
+    - .base_apply
+  variables:
+    NAMESPACES: "automation databases cache monitoring"
+  script:
+    # Validation préalable des manifests
+    - chmod +x .gitlab/scripts/kubernetes/validate-manifests.sh
+    - .gitlab/scripts/kubernetes/validate-manifests.sh "kubernetes"
+    # Setup des namespaces
+    - chmod +x .gitlab/scripts/kubernetes/setup-namespaces.sh
+    - .gitlab/scripts/kubernetes/setup-namespaces.sh "$NAMESPACES"
+  artifacts:
+    paths:
+      - kubernetes-setup-report.json
+      - manifest_validation_report.json
+    expire_in: 1 week
+    when: always
+
+# =============================================================================
+# TEMPLATES PAR ENVIRONNEMENT
+# =============================================================================
+
+.kubernetes_setup_dev:
+  extends: 
+    - .kubernetes_setup_namespaces
+    - .rules_manual_dev
+  variables:
+    ENV: dev
+    CLUSTER_NAME: "homelab-k3s-dev"
+
+.kubernetes_setup_prod:
+  extends: 
+    - .kubernetes_setup_namespaces
+    - .rules_manual_prod
+  variables:
+    ENV: prod
+    CLUSTER_NAME: "homelab-k3s"
+  environment:
+    name: kubernetes-production
+    action: start
+
+# =============================================================================
+# VALIDATION ET TESTS
+# =============================================================================
+
+.kubernetes_test:
+  extends: 
+    - .kubernetes_base
+    - .timeout_short
+  variables:
+    TEST_NAMESPACE: "automation"
+  script:
+    - chmod +x .gitlab/scripts/kubernetes/test-connectivity.sh
+    - .gitlab/scripts/kubernetes/test-connectivity.sh "$TEST_NAMESPACE"
+
+# =============================================================================
+# NETTOYAGE
+# =============================================================================
+
+.kubernetes_cleanup:
+  extends: 
+    - .kubernetes_base
+    - .timeout_short
+  script:
+    - chmod +x .gitlab/scripts/kubernetes/cleanup-resources.sh
+    - .gitlab/scripts/kubernetes/cleanup-resources.sh

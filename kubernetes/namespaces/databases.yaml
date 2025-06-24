@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: databases
+  labels:
+    name: databases
+    purpose: data-storage
+    environment: {{ .Values.environment | default "prod" }}
+    managed-by: terraform
+    security-level: high
+  annotations:
+    description: "Namespace pour les bases de données et stockage persistant"
+    contact: "infrastructure-team"
+    backup-policy: "daily"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: databases-quota
+  namespace: databases
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    persistentvolumeclaims: "10"
+    services: "5"
+    secrets: "30"
+    requests.storage: "100Gi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: databases-limits
+  namespace: databases
+spec:
+  limits:
+  - default:
+      cpu: "2"
+      memory: "4Gi"
+    defaultRequest:
+      cpu: "500m"
+      memory: "1Gi"
+    type: Container
+  - default:
+      storage: "50Gi"
+    type: PersistentVolumeClaim
+  - min:
+      storage: "1Gi"
+    max:
+      storage: "500Gi"
+    type: PersistentVolumeClaim

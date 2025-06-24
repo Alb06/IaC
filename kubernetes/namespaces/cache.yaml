@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cache
+  labels:
+    name: cache
+    purpose: caching-layer
+    environment: {{ .Values.environment | default "prod" }}
+    managed-by: terraform
+    performance-tier: high
+  annotations:
+    description: "Namespace pour les services de cache et mémoire distribuée"
+    contact: "infrastructure-team"
+    sla: "99.9%"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: cache-quota
+  namespace: cache
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "3"
+    services: "5"
+    secrets: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cache-limits
+  namespace: cache
+spec:
+  limits:
+  - default:
+      cpu: "1"
+      memory: "2Gi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "512Mi"
+    type: Container
+  - default:
+      storage: "20Gi"
+    type: PersistentVolumeClaim
+  - min:
+      storage: "1Gi"
+    max:
+      storage: "100Gi"
+    type: PersistentVolumeClaim

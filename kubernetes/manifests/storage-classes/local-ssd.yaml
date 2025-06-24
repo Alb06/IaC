@@ -1,0 +1,71 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-ssd-fast
+  labels:
+    performance-tier: high
+    storage-type: ssd
+  annotations:
+    description: "Stockage SSD local haute performance pour bases de données"
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: rancher.io/local-path
+parameters:
+  hostPathTemplate: "/opt/local-path-provisioner/ssd-fast"
+  nodePathMap: |
+    [
+      {
+        "node":"DEFAULT_PATH_FOR_NON_LISTED_NODES",
+        "paths":["/opt/local-path-provisioner/ssd-fast"]
+      }
+    ]
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-standard
+  labels:
+    performance-tier: standard
+    storage-type: hdd
+  annotations:
+    description: "Stockage standard pour données non critiques"
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: rancher.io/local-path
+parameters:
+  hostPathTemplate: "/opt/local-path-provisioner/standard"
+  nodePathMap: |
+    [
+      {
+        "node":"DEFAULT_PATH_FOR_NON_LISTED_NODES",
+        "paths":["/opt/local-path-provisioner/standard"]
+      }
+    ]
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-backup
+  labels:
+    performance-tier: backup
+    storage-type: hdd
+  annotations:
+    description: "Stockage pour sauvegardes et archives"
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: rancher.io/local-path
+parameters:
+  hostPathTemplate: "/opt/local-path-provisioner/backups"
+  nodePathMap: |
+    [
+      {
+        "node":"DEFAULT_PATH_FOR_NON_LISTED_NODES",
+        "paths":["/opt/backups/kubernetes"]
+      }
+    ]
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: false

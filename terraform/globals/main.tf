@@ -3,7 +3,7 @@
 # =============================================================================
 # Description : Source unique de vérité pour toutes les configurations
 # Auteur      : Infrastructure Team
-# Version     : 1.0.0
+# Version     : 1.1.0 - Ajout namespaces spécialisés
 # =============================================================================
 
 # NOTE: Les contraintes Terraform sont maintenant dans versions.tf
@@ -47,6 +47,7 @@ locals {
     ubuntu       = "24.04"
     postgresql   = "17.5"
     gitlab_runner = "17.11.1"
+    kubectl      = "v1.33.1"  # 🆕 Ajout version kubectl
   }
 
   # Configuration réseau globale
@@ -66,6 +67,8 @@ locals {
     k3s_api    = 6443
     postgresql = 5432
     gitlab_runner = 8093
+    redis      = 6379      # 🆕 Port Redis
+    memcached  = 11211     # 🆕 Port Memcached
   }
 
   # Configuration Docker
@@ -75,13 +78,54 @@ locals {
     volumes_path = "/opt/docker/volumes"
   }
 
-  # Configuration Kubernetes
+  # 🆕 Configuration Kubernetes étendue
   kubernetes = {
     cluster_name     = "homelab-k3s"
-    namespace_default = "default"
+    # Namespaces étendus avec les nouveaux
+    namespace_default    = "default"
     namespace_monitoring = "monitoring"
-    namespace_ingress = "ingress-nginx"
-    storage_class    = "local-path"
+    namespace_ingress    = "ingress-nginx"
+    namespace_automation = "automation"    # 🆕 Nouveau namespace
+    namespace_databases  = "databases"     # 🆕 Nouveau namespace
+    namespace_cache      = "cache"         # 🆕 Nouveau namespace
+    
+    # Storage classes disponibles
+    storage_class        = "local-path"
+    storage_class_ssd    = "local-ssd-fast"    # 🆕 Storage SSD haute performance
+    storage_class_standard = "local-standard"  # 🆕 Storage standard
+    storage_class_backup = "local-backup"      # 🆕 Storage pour backups
+    
+    # Configuration des quotas par namespace
+    quotas = {
+      automation = {
+        cpu_requests    = "2"
+        memory_requests = "4Gi"
+        cpu_limits      = "4"
+        memory_limits   = "8Gi"
+        storage         = "50Gi"
+      }
+      databases = {
+        cpu_requests    = "4"
+        memory_requests = "8Gi"
+        cpu_limits      = "8"
+        memory_limits   = "16Gi"
+        storage         = "100Gi"
+      }
+      cache = {
+        cpu_requests    = "2"
+        memory_requests = "4Gi"
+        cpu_limits      = "4"
+        memory_limits   = "8Gi"
+        storage         = "20Gi"
+      }
+      monitoring = {
+        cpu_requests    = "3"
+        memory_requests = "6Gi"
+        cpu_limits      = "6"
+        memory_limits   = "12Gi"
+        storage         = "200Gi"
+      }
+    }
   }
 
   # Labels et tags communs
@@ -102,6 +146,9 @@ locals {
       backup_retention   = "7d"
       monitoring_level   = "basic"
       auto_scaling      = false
+      # 🆕 Configuration K8s dev
+      kubernetes_quotas_enabled = false
+      network_policies_enabled  = false
     }
     prod = {
       replicas          = 2
@@ -109,6 +156,9 @@ locals {
       backup_retention  = "30d"
       monitoring_level  = "full"
       auto_scaling     = true
+      # 🆕 Configuration K8s prod
+      kubernetes_quotas_enabled = true
+      network_policies_enabled  = true
     }
   }
 
