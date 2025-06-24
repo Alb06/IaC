@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: automation
+  labels:
+    name: automation
+    purpose: workflow-automation
+    environment: {{ .Values.environment | default "prod" }}
+    managed-by: terraform
+  annotations:
+    description: "Namespace pour les outils d'automatisation et workflows"
+    contact: "infrastructure-team"
+    created-by: "gitlab-ci"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: automation-quota
+  namespace: automation
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "5"
+    services: "10"
+    secrets: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: automation-limits
+  namespace: automation
+spec:
+  limits:
+  - default:
+      cpu: "500m"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "256Mi"
+    type: Container
+  - default:
+      storage: "10Gi"
+    type: PersistentVolumeClaim

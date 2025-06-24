@@ -1,0 +1,51 @@
+# =============================================================================
+# JOBS DE DÉPLOIEMENT KUBERNETES
+# =============================================================================
+# Description : Jobs pour le setup et la validation des namespaces K8s
+# Version     : 1.0.0
+# =============================================================================
+
+# Setup des namespaces en dev
+kubernetes_setup_dev:
+  extends: .kubernetes_setup_dev
+  stage: kubernetes
+  dependencies:
+    - apply_dev
+  needs:
+    - job: apply_dev
+      artifacts: true
+
+# Setup des namespaces en prod
+kubernetes_setup_prod:
+  extends: .kubernetes_setup_prod
+  stage: kubernetes
+  dependencies:
+    - apply_prod
+  needs:
+    - job: apply_prod
+      artifacts: true
+
+# Validation des namespaces (peut être lancé indépendamment)
+kubernetes_validate:
+  extends: .kubernetes_validate
+  stage: kubernetes
+  variables:
+    MANIFEST_PATH: "kubernetes/manifests"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  needs: []
+
+# Test de connectivité des namespaces
+kubernetes_test:
+  extends: .kubernetes_test
+  stage: kubernetes
+  variables:
+    TEST_NAMESPACE: "automation"
+  dependencies:
+    - kubernetes_setup_dev
+    - kubernetes_setup_prod
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true

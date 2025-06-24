@@ -1,0 +1,50 @@
+# Note: Le namespace monitoring existe déjà, ce fichier ajoute les quotas et limites
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: monitoring-quota
+  namespace: monitoring
+spec:
+  hard:
+    requests.cpu: "3"
+    requests.memory: 6Gi
+    limits.cpu: "6"
+    limits.memory: 12Gi
+    persistentvolumeclaims: "8"
+    services: "15"
+    secrets: "25"
+    requests.storage: "200Gi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: monitoring-limits
+  namespace: monitoring
+spec:
+  limits:
+  - default:
+      cpu: "1"
+      memory: "2Gi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "512Mi"
+    type: Container
+  - default:
+      storage: "50Gi"
+    type: PersistentVolumeClaim
+  - min:
+      storage: "5Gi"
+    max:
+      storage: "500Gi"
+    type: PersistentVolumeClaim
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: monitoring-config
+  namespace: monitoring
+type: Opaque
+data:
+  # Ces valeurs seront injectées via Terraform/Ansible
+  retention-days: MzA=  # 30 en base64
+  alert-webhook: ""     # À définir

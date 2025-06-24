@@ -2,7 +2,7 @@
 # PIPELINE GITLAB CI/CD - INFRASTRUCTURE AS CODE (VERSION MODULAIRE)
 # =============================================================================
 # Description : Pipeline orchestrateur utilisant une architecture modulaire
-# Version     : 3.1.0 - Refactorisation DRY complète
+# Version     : 3.2.0 - Ajout stage Kubernetes
 # Migration   : Depuis pipeline monolithique v2.0.0
 # Auteur      : Infrastructure Team
 # =============================================================================
@@ -13,22 +13,25 @@ include:
   - local: '.gitlab/ci/templates/globals.yml'
   - local: '.gitlab/ci/templates/terraform.yml'
   - local: '.gitlab/ci/templates/ansible.yml'
+  - local: '.gitlab/ci/templates/kubernetes.yml'  # 🆕 Templates Kubernetes
 
   - local: '.gitlab/ci/jobs/apply/terraform.yml'
   - local: '.gitlab/ci/jobs/cleanup/terraform.yml'
   - local: '.gitlab/ci/jobs/deploy/ansible.yml'
+  - local: '.gitlab/ci/jobs/deploy/kubernetes.yml'  # 🆕 Jobs Kubernetes
   - local: '.gitlab/ci/jobs/plan/terraform.yml'
   - local: '.gitlab/ci/jobs/sync/github.yml'
   - local: '.gitlab/ci/jobs/validate/terraform.yml'
 
 # 🔄 STAGES DU PIPELINE
 stages:
-  - validate     # Validation syntaxique et versions
-  - plan         # Planification des changements
-  - apply        # Application infrastructure
-  - deploy       # Déploiement applicatif
-  - sync         # Synchronisation externes
-  - cleanup      # Nettoyage ressources
+  - validate       # Validation syntaxique et versions
+  - plan           # Planification des changements
+  - apply          # Application infrastructure
+  - kubernetes     # 🆕 Configuration Kubernetes
+  - deploy         # Déploiement applicatif
+  - sync           # Synchronisation externes
+  - cleanup        # Nettoyage ressources
 
 # =============================================================================
 # 🚨 CONFIGURATION DE SÉCURITÉ GLOBALE
@@ -42,6 +45,9 @@ variables:
   GIT_CLEAN_FLAGS: -ffdx
   
   # Métadonnées pipeline
-  PIPELINE_VERSION: "3.0.0"
+  PIPELINE_VERSION: "3.2.0"
   PIPELINE_TYPE: "modular"
-
+  
+  # 🆕 Configuration Kubernetes
+  KUBECTL_VERSION: "v1.33.1"
+  CLUSTER_NAME: "homelab-k3s"
