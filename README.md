@@ -1,213 +1,190 @@
-﻿# Infrastructure as Code (IaC) via GitLab CI/CD
+﻿# 🏗️ Infrastructure as Code (IaC) via GitLab CI/CD
 
-## Vue d'ensemble
+[![Pipeline Status](https://img.shields.io/badge/pipeline-GitLab%20CI%2FCD-orange)](https://gitlab.com/dev1338/iac/-/pipelines)
+[![IaC](https://img.shields.io/badge/IaC-Terraform%20%7C%20Ansible%20%7C%20Kubernetes-blue)](#)
+[![Documentation](https://img.shields.io/badge/docs-complete-brightgreen)](docs/README.md)
 
-Ce projet implémente une approche Infrastructure as Code (IaC) complète via GitLab CI/CD pour automatiser le déploiement, la configuration et la gestion d'infrastructure sur un serveur Ubuntu 24.04.
+## 🎯 Vue d'ensemble
 
-L'objectif est de créer une infrastructure reproductible, versionnable et maintenable en utilisant des outils modernes de provisionnement et d'orchestration.
+Infrastructure **HomeLab** complètement automatisée utilisant les principes **Infrastructure as Code** (IaC) avec GitLab CI/CD, Terraform, Ansible et Kubernetes.
 
-![Badges](https://img.shields.io/badge/IaC-Terraform%20%7C%20Ansible%20%7C%20Kubernetes-blue)
-![Pipeline Status](https://img.shields.io/badge/pipeline-GitLab%20CI%2FCD-orange)
+### Objectifs
 
-## Architecture et composants
+- ✅ **Reproductibilité** : Infrastructure versionnable et déployable
+- ✅ **Automatisation** : Déploiements via pipelines CI/CD  
+- ✅ **Scalabilité** : Architecture modulaire et extensible
+- ✅ **Monitoring** : Observabilité complète avec Prometheus
 
-```
-┌─────────────────┐         ┌───────────────┐        ┌─────────────────┐
-│  Windows Dev    │         │  GitLab.com   │        │  Ubuntu Server  │
-│  VS 2022        │ ───►    │ CI/CD Pipeline│ ───►   │  24.04 LTS      │
-└─────────────────┘         └───────────────┘        └─────────────────┘
-   Développement                Pipelines              Infrastructure
-```
+## 🚀 Quick Start
 
-### Composants principaux
-
-- **Terraform** (v1.11.4) : Provisionnement de l'infrastructure
-- **Ansible** : Configuration et déploiement d'applications
-- **Kubernetes/Helm** : Orchestration de conteneurs
-- **GitLab CI/CD** : Automatisation des workflows de déploiement
-- **Docker** : Conteneurisation des services
-
-## Prérequis
-
-### Machine de développement
-
-- Windows avec Visual Studio Enterprise 2022
-- Git client
-- Docker Desktop (recommandé)
-- Terraform CLI (optionnel, déjà inclus dans le pipeline)
-
-### Serveur cible
+### Prérequis Rapides
 
 - Ubuntu Server 24.04 LTS
-- Sur le même réseau privé que la machine de développement
-- Minimum recommandé : 4 CPU, 8 Go RAM, 500 Go SSD
-- Configuration réseau : IP fixe
+- GitLab.com account + Runner configuré
+- Variables CI/CD configurées (`SSH_PRIVATE_KEY`, `TF_VAR_server_ip`)
 
-### GitLab
-
-- Compte GitLab.com (licence gratuite)
-- GitLab Runner installé et configuré sur le serveur
-
-## Structure du projet
-
-```
-/
-├── .gitlab-ci.yml                 # Configuration pipeline CI/CD
-├── README.md                      # Ce fichier
-├── terraform/                     # Configuration Infrastructure
-│   ├── modules/                   # Modules Terraform réutilisables
-│   ├── environments/              # Configurations spécifiques aux environnements
-│   │   ├── dev/                   # Environnement de développement
-│   │   └── prod/                  # Environnement de production
-│   └── variables/                 # Définitions des variables
-├── ansible/                       # Configuration et déploiement
-│   ├── playbooks/                 # Playbooks Ansible
-│   ├── roles/                     # Rôles réutilisables
-│   └── inventory/                 # Inventaires des environnements
-├── kubernetes/                    # Orchestration des conteneurs
-│   ├── manifests/                 # Manifestes Kubernetes
-│   └── helm-charts/               # Charts Helm personnalisés
-└── scripts/                       # Scripts utilitaires
-    └── ci-cd/                     # Scripts spécifiques au CI/CD
-```
-
-## Installation et configuration
-
-### 1. Clonage du projet
+### Déploiement en 15 minutes
 
 ```bash
 git clone https://gitlab.com/dev1338/iac.git
 cd iac
+git push origin main  # Déclenche le pipeline
+# Approuver manuellement apply_dev dans GitLab UI
 ```
 
-### 2. Configuration du serveur
+📖 **Guide complet** : [docs/getting-started/quick-start.md](docs/getting-started/quick-start.md)
 
-Le serveur Ubuntu doit être préparé avec les éléments suivants :
+## 🏗️ Architecture
 
-```bash
-# Mise à jour du système
-sudo apt update && sudo apt upgrade -y
-
-# Installation des dépendances
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release git
-
-# Installation de Docker
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io
-sudo usermod -aG docker $USER
-
-# Installation du GitLab Runner
-curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
-sudo apt install gitlab-runner
-sudo usermod -aG docker gitlab-runner
+```text
+┌─────────────────┐     ┌───────────────┐    ┌─────────────────┐
+│  Developer      │───▶│  GitLab CI/CD │───▶│  Ubuntu Server  │
+│  (VS 2022)      │     │  Pipeline     │    │  (K3s + Apps)   │
+└─────────────────┘     └───────────────┘    └─────────────────┘
 ```
 
-### 3. Enregistrement du GitLab Runner
+### Stack Technologique
 
-```bash
-sudo gitlab-runner register
-# Suivez les instructions à l'écran :
-# - URL GitLab : https://gitlab.com/
-# - Token : [disponible dans les paramètres CI/CD de votre projet]
-# - Description : [nom descriptif pour votre runner]
-# - Tags : terraform,ansible,kubernetes
-# - Executor : docker
-# - Image par défaut : alpine:latest
+- **IaC** : Terraform (infrastructure) + Ansible (configuration)
+- **Orchestration** : Kubernetes (K3s) + Helm
+- **CI/CD** : GitLab Pipelines + Self-hosted Runner
+- **Monitoring** : Prometheus + métriques automatiques
+
+📖 **Architecture détaillée** : [docs/architecture/README.md](docs/architecture/README.md)
+
+## 📚 Documentation
+
+| Guide | Description | Audience |
+|-------|-------------|----------|
+| [🏁 Getting Started](docs/getting-started/README.md) | Déploiement rapide | Tous |
+| [🏗️ Architecture](docs/architecture/README.md) | Vue d'ensemble technique | DevOps |
+| [📖 Guides](docs/guides/README.md) | Documentation par composant | Technique |
+| [⚙️ Operations](docs/operations/README.md) | Maintenance et monitoring | Ops |
+| [🔧 Troubleshooting](docs/troubleshooting/README.md) | Résolution problèmes | Support |
+
+📖 **Documentation complète** : [docs/README.md](docs/README.md)
+
+## 🛠️ Composants
+
+### Infrastructure (Terraform)
+
+- **Modules** : Variables centralisées, configurations par environnement
+- **Environments** : Dev (192.168.1.63) + Prod (192.168.1.64)
+- **State** : Management local avec sauvegardes
+
+### Configuration (Ansible)
+
+- **Inventaires** : Générés dynamiquement par Terraform
+- **Playbooks** : Configuration services et applications
+- **Rôles** : Composants réutilisables
+
+### Orchestration (Kubernetes)
+
+- **Cluster** : K3s single-node avec extensions
+- **Namespaces** : `automation`, `databases`, `cache`, `monitoring`
+- **Storage** : Classes multiples (SSD, standard, backup)
+- **Security** : RBAC + Network Policies
+
+### Monitoring (Prometheus)
+
+- **Métriques** : Infrastructure + Kubernetes + Applications
+- **Alerting** : Règles prédéfinies + notifications
+- **Storage** : Rétention adaptée par environnement
+
+## 🔄 Workflow CI/CD
+
+```yaml
+Stages:
+  validate:    # Validation syntaxique (auto)
+  plan:        # Planification Terraform (auto)
+  apply:       # Déploiement infrastructure (manuel)
+  kubernetes:  # Setup K8s + Prometheus (auto)
+  deploy:      # Applications Ansible (manuel)
+  sync:        # Synchronisation GitHub (auto)
+  cleanup:     # Nettoyage ressources (manuel)
 ```
 
-## Workflow CI/CD
+📖 **Pipeline détaillé** : [docs/guides/gitlab-ci/README.md](docs/guides/gitlab-ci/README.md)
 
-Notre pipeline est structuré en plusieurs étapes:
+## 📊 État du Projet
 
-1. **Validate** : Vérifie la syntaxe et la cohérence des fichiers Terraform
-2. **Plan** : Génère et affiche un plan des modifications à appliquer
-3. **Apply** : Applique les modifications (validation manuelle requise)
-4. **Cleanup** : Nettoie les ressources temporaires (optionnel)
+### ✅ Fonctionnalités Opérationnelles
 
-![Pipeline Workflow](https://mermaid.ink/img/pako:eNp1kM1qwzAQhF9F7CkFv0DooT9QeughpQdTL0FaK4uw5KDVQnDw2_eiOnZDSnejZWfmW7hJbTAK16mP0RnCDxRcG0cU7UMP7EgkRawecIMNYYeOYXKOQxS6oLDY4Fy2TJ3W8kkbbBCahH9uozEZ3w9U5Ys-bnOBvdH0H1XefKqNzaRbUyrhvbchTFYwyJuEySs0FjW3-pHXbV03sqqXy16oulHNqlJN_dxW7apqygpRJHLo4OkP6Sj-ePfK1GsQ3h7HgIk-2R6cPRSPsvwFkslr0Q)
+- Infrastructure Terraform (dev/prod)
+- Pipeline GitLab CI/CD complet
+- Cluster Kubernetes K3s
+- Namespaces avec quotas et sécurité
+- Monitoring Prometheus de base
+- Scripts automatisés (installation, validation, déploiement)
 
-## Variables d'environnement
+### 🔄 En Cours
 
-Les variables suivantes doivent être configurées dans les paramètres CI/CD du projet GitLab:
+- Documentation complète (cette tâche)
+- Charts Helm personnalisés
+- Playbooks Ansible avancés
 
-| Variable | Description | Exemple |
-|----------|-------------|---------|
-| `TF_VAR_server_ip` | Adresse IP du serveur cible | `192.168.1.100` |
-| `TF_VAR_domain_name` | Nom de domaine (si applicable) | `example.com` |
-| `ANSIBLE_HOST_KEY_CHECKING` | Désactive la vérification des clés SSH | `False` |
-| `SSH_PRIVATE_KEY` | Clé SSH pour la connexion au serveur | `-----BEGIN RSA PRIVATE KEY...` |
+### 📋 Roadmap
 
-## Commandes utiles
+- Grafana + dashboards
+- AlertManager + notifications
+- Applications de démonstration
+- Tests automatisés d'intégration
 
-### Terraform (local)
+## 🤝 Contribution
 
-```bash
-# Initialisation
-terraform init
+### Workflow de Contribution
 
-# Vérification de la syntaxe
-terraform validate
+1. **Fork** le projet ou créer une branche feature
+2. **Développer** avec les standards du projet
+3. **Tester** via pipeline CI/CD
+4. **Merge Request** vers main avec review
 
-# Création du plan
-terraform plan -out=tfplan
+### Standards
 
-# Application du plan
-terraform apply tfplan
-```
+- **Code** : HCL formaté, YAML valide, scripts bash lintés
+- **Documentation** : Mise à jour systématique
+- **Tests** : Validation pipeline obligatoire
+- **Sécurité** : Pas de secrets en dur
 
-### GitLab CI/CD
+📖 **Guide détaillé** : [docs/contributing/README.md](docs/contributing/README.md)
 
-```bash
-# Exécution manuelle du pipeline
-gitlab-runner exec docker validate --env TF_ROOT=${PWD}/terraform/environments
+## 📞 Support
 
-# Vérification du statut du runner
-sudo gitlab-runner status
-```
+### Ressources
 
-## Troubleshooting
+- **📖 Documentation** : [docs/](docs/README.md)
+- **🐛 Issues** : [GitLab Issues](https://gitlab.com/dev1338/iac/-/issues)
+- **💬 Discussions** : [GitLab Discussions](https://gitlab.com/dev1338/iac/-/discussions)
+- **📊 Monitoring** : Prometheus (port-forward depuis K3s)
 
-### Problèmes courants
+### Contact
 
-1. **Erreur "sh: not found"** : Les images Docker minimalistes (Alpine) nécessitent l'installation de bash via `apk add --no-cache bash`.
-
-2. **Problèmes d'accès SSH** : Vérifiez que la clé privée est correctement configurée dans les variables CI/CD et que l'utilisateur cible dispose des autorisations nécessaires.
-
-3. **Terraform "Plugin reinitialization required"** : Supprimez le répertoire `.terraform` et relancez `terraform init`.
-
-## Standards et bonnes pratiques
-
-- **Code Terraform** : Modulaire, réutilisable et documenté
-- **Conventions de nommage** : snake_case pour les variables, ressources et fichiers
-- **Variables d'environnement** : Utilisées pour les valeurs spécifiques à l'environnement
-- **Secrets** : Jamais stockés en clair, toujours dans les variables GitLab CI/CD
-- **Documentation** : README par module/composant expliquant son utilisation
-
-## État actuel du projet
-
-- ✅ Configuration du serveur Ubuntu 24.04
-- ✅ Installation des prérequis (Docker, GitLab Runner)
-- ✅ Configuration du pipeline CI/CD
-- ✅ Structure de base du projet
-- ⏳ Modules Terraform initiaux
-- ⏳ Playbooks Ansible
-- ⏳ Configuration Kubernetes/Helm
-
-## Contributions
-
-Pour contribuer à ce projet :
-
-1. Créez une nouvelle branche à partir de `main`
-2. Effectuez vos modifications
-3. Soumettez une Merge Request vers `main`
-4. Attendez la validation du pipeline CI/CD
-5. Demandez une revue de code
-
-## Licence
-
-Ce projet est sous licence interne et ne doit pas être distribué sans autorisation.
+- **Équipe Infrastructure** : Via GitLab Issues
+- **Urgences** : SSH direct vers serveurs + logs
+- **Améliorations** : Merge Requests bienvenues
 
 ---
 
-*Dernière mise à jour : avril 2025*
+## 📋 TL;DR
+
+```bash
+# Clone + Configuration
+git clone https://gitlab.com/dev1338/iac.git && cd iac
+
+# Déploiement automatique
+git push origin main
+# → Suivre pipeline GitLab
+# → Approuver apply_dev manuellement
+# → Infrastructure prête en 15 min
+
+# Accès services
+ssh ubuntu@192.168.1.63
+sudo k3s kubectl get all -A
+sudo k3s kubectl port-forward -n monitoring svc/prometheus 9090:9090
+```
+
+**🎯 Next**: [Documentation Complète](docs/README.md) | [Quick Start](docs/getting-started/quick-start.md)
+
+---
+
+*Dernière mise à jour : {{ current_date }} | Version : v3.2.0*
